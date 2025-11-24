@@ -52,8 +52,8 @@ export class PipelineManager
             },
             primitive: {
                 topology: 'triangle-list',
-                frontFace: 'ccw',
-                cullMode: 'back'
+                frontFace: descriptor.frontFace ?? 'ccw',
+                cullMode: descriptor.cullMode ?? 'back'
             },
             depthStencil: {
                 format: 'depth24plus',
@@ -72,7 +72,10 @@ export class PipelineManager
         return [
             desc.vertexShaderUrl,
             desc.fragmentShaderUrl,
-            desc.colorFormat
+            desc.colorFormat,
+            desc.translucent,
+            desc.cullMode,
+            desc.frontFace
         ].join('|');
     }
 }

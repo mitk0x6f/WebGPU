@@ -8,4 +8,6 @@ export interface PipelineDescriptor
     bindGroupLayouts: GPUBindGroupLayout[];
     colorFormat: GPUTextureFormat;
     translucent?: boolean;
+    cullMode?: GPUCullMode;
+    frontFace?: GPUFrontFace;
 }
