@@ -4,6 +4,57 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.1.1] - 2025-11-25
+
+### 🚀 Core Engine
+
+- Implemented oblique near-plane clipping for water reflections
+- Added dual render pass system (main + reflection)
+- Reflection texture management with automatic resize handling
+
+### 🎮 Input & Camera
+
+- Extended camera system with clip plane support
+- Oblique projection matrix calculation for reflection camera
+- Mirrored camera view matrix for reflection rendering
+
+### 🎨 Shader
+
+- **Water Shader Enhancements**:
+  - Physically-based water rendering with Fresnel effect
+  - Procedural wave normals using gradient-based approach
+  - Normal-based reflection distortion
+  - Deep water color mixing based on viewing angle
+- **Cube Shader Updates**:
+  - Added world position output for water clipping
+  - Fragment-level water surface clipping using discard
+  - Custom lighting model (even top/sides, dark bottom)
+- **Skybox Improvements**:
+  - Corrected cubemap direction calculation for reflections
+  - Updated to work with mirrored camera views
+- **Code Quality**:
+  - Standardized formatting across all WGSL shaders
+  - Improved struct and function declarations consistency
+
+### 💡 Lighting & Environment
+
+- Updated skybox assets (skybox2)
+- Reflection integration with skybox cubemap
+- Reduced reflection clear color artifacts
+- Adjusted distortion strength for cleaner reflections
+
+### 🧰 Build & Platform
+
+- Texture loader updated for PNG format cubemaps
+
+### 📖 Documentation
+
+- Updated README.md with reflection features
+- Added TODOs for water height uniform system
+- Code comments for oblique projection implementation
+
+---
+
 ## [0.1.0] - 2025-11-21
 
 ### 🚀 Core Engine

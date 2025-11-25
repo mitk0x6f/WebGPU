@@ -2,95 +2,124 @@
 // Fragment shader: filtered samples for color/normal/ao/roughness + shading
 // groups: 0 = frame, 1 = scene, 3 = material (sampler + textures + UB)
 
-@group(0) @binding(0) var<uniform> uFrame : vec4<f32>;
+@group(0) @binding(0) var<uniform> uFrame: vec4<f32>;
 
-struct SceneUniform {
-    viewProj : mat4x4<f32>,
-    cameraPos: vec4<f32>,
+struct SceneUniform
+{
+    viewProj: mat4x4<f32>,
+    cameraPos: vec4<f32>
 };
-@group(1) @binding(0) var<uniform> uScene : SceneUniform;
 
+@group(1) @binding(0) var<uniform> uScene: SceneUniform;
+@group(1) @binding(1) var skyboxSampler: sampler;
+@group(1) @binding(2) var skyboxTexture: texture_cube<f32>;
+@group(1) @binding(3) var reflectionTexture: texture_2d<f32>;
 // Material bindings
-@group(3) @binding(0) var samp : sampler; // fragment-only sampler
-@group(3) @binding(1) var baseColorTex : texture_2d<f32>;
-@group(3) @binding(2) var normalMapTex : texture_2d<f32>;
-@group(3) @binding(3) var displacementMapTex : texture_2d<f32>; // bound but not sampled here
-@group(3) @binding(4) var aoTex : texture_2d<f32>;
-@group(3) @binding(5) var roughnessTex : texture_2d<f32>;
-// material uniform: uvScaleX, uvScaleY, roughnessFactor, dispScale
-@group(3) @binding(6) var<uniform> uMaterial : vec4<f32>;
+@group(3) @binding(0) var samp: sampler; // fragment-only sampler
+@group(3) @binding(1) var baseColorTex: texture_2d<f32>;
+// Other textures unused for flat water, but bindings must match layout if we use the same layout
+@group(3) @binding(2) var normalMapTex: texture_2d<f32>;
+@group(3) @binding(3) var displacementMapTex: texture_2d<f32>;
+@group(3) @binding(4) var aoTex: texture_2d<f32>;
+@group(3) @binding(5) var roughnessTex: texture_2d<f32>;
+@group(3) @binding(6) var<uniform> uMaterial: vec4<f32>;
 
-struct FragmentInput {
-    @location(0) vNormal : vec3<f32>,
-    @location(1) vUV     : vec2<f32>,
-    @location(2) vWorldPos : vec3<f32>,
-    @location(3) vViewDir  : vec3<f32>,
+struct FragmentInput
+{
+    @location(0) vNormal: vec3<f32>,
+    @location(1) vUV: vec2<f32>,
+    @location(2) vWorldPos: vec3<f32>,
+    @location(3) vViewDir: vec3<f32>,
+    @location(4) vClipPos: vec4<f32>
 };
 
-fn schlick_fresnel(cosTheta: f32, F0: vec3<f32>) -> vec3<f32> {
+fn schlick_fresnel(cosTheta: f32, F0: vec3<f32>) -> vec3<f32>
+{
     return F0 + (vec3<f32>(1.0) - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
 @fragment
-fn main(in: FragmentInput) -> @location(0) vec4<f32> {
-    var N = normalize(in.vNormal);
+fn main(in: FragmentInput) -> @location(0) vec4<f32>
+{
+    // Flat water surface
+    // Depth absorption (Beer's Law)
+
+    let N = normalize(in.vNormal);
     let V = normalize(in.vViewDir);
 
-    // sample base color
-    let albedoSample = textureSample(baseColorTex, samp, in.vUV);
-    let albedo = albedoSample.rgb;
+    // Reflection
+    // Calculate screen space UV
+    let ndc = in.vClipPos.xy / in.vClipPos.w;
+    var screenUV = ndc * vec2<f32>(0.5, 0.5) + vec2<f32>(0.5, 0.5); // No Y-flip for texture coords
 
-    // sample normal map and convert to [-1,1]
-    let nm = textureSample(normalMapTex, samp, in.vUV);
-    let mapped = normalize(vec3<f32>(nm.x * 2.0 - 1.0, nm.y * 2.0 - 1.0, nm.z * 2.0 - 1.0));
-    // blend analytic normal and normal map; higher blend = more detail from normal map
-    N = normalize(mix(N, mapped, 0.6));
+    // Standard Water Model
 
-    // AO and roughness
-    let ao = textureSample(aoTex, samp, in.vUV).r;
-    let roughSample = textureSample(roughnessTex, samp, in.vUV).r;
-    let roughness = clamp(roughSample * uMaterial.z, 0.0, 1.0);
+    // 1. Calculate Surface Normal (Procedural Waves)
+    // We use the derivative of the wave function to get the normal
+    let time = uFrame.x * 0.5; // Slower, more majestic movement
+    let worldPos = in.vWorldPos.xz;
 
-    // lighting (simple directional)
-    let L = normalize(vec3<f32>(0.3, 0.9, 0.5));
-    let diff = max(dot(N, L), 0.0);
-    let H = normalize(L + V);
-    let spec = pow(max(dot(N, H), 0.0), mix(8.0, 128.0, 1.0 - roughness));
+    // Simple sum of sines for height, but we need derivatives for normal
+    // Normal = normalize(vec3(-dh/dx, 1.0, -dh/dz))
 
-    // depth below surface (assume water surface at y=0)
-    let depthBelow = max(0.0, -in.vWorldPos.y);
-    // Beer-Lambert extinction
-    let extinction = 2.2; // tweak for look
-    let transmission = exp(-extinction * depthBelow);
+    var dh_dx = 0.0;
+    var dh_dz = 0.0;
 
-    // color mixing between shallow and deep tints
-    let shallowColor = vec3<f32>(0.02, 0.45, 0.7);
-    let deepColor    = vec3<f32>(0.0, 0.02, 0.06);
-    var waterTint = mix(deepColor, shallowColor, transmission);
+    // Wave 1
+    let k1 = vec2<f32>(1.0, 0.5); // Direction
+    let f1 = 2.0; // Frequency
+    let a1 = 0.01; // Amplitude
+    let p1 = dot(k1, worldPos) * f1 + time;
+    dh_dx += k1.x * f1 * a1 * cos(p1);
+    dh_dz += k1.y * f1 * a1 * cos(p1);
 
-    // fresnel
-    let F0 = vec3<f32>(0.02);
-    let fresnel = schlick_fresnel(clamp(dot(V, N), 0.0, 1.0), F0);
-    let reflectAmount = fresnel.x * (1.0 - roughness);
-    let envColor = vec3<f32>(0.7, 0.85, 0.95);
+    // Wave 2
+    let k2 = vec2<f32>(0.7, -1.0);
+    let f2 = 1.5;
+    let a2 = 0.008;
+    let p2 = dot(k2, worldPos) * f2 + time * 1.2;
+    dh_dx += k2.x * f2 * a2 * cos(p2);
+    dh_dz += k2.y * f2 * a2 * cos(p2);
 
-    var color = mix(waterTint * albedo, envColor, reflectAmount * 0.9);
+    // Wave 3 (High frequency detail)
+    let k3 = vec2<f32>(-0.2, 1.5);
+    let f3 = 4.0;
+    let a3 = 0.003;
+    let p3 = dot(k3, worldPos) * f3 + time * 1.5;
+    dh_dx += k3.x * f3 * a3 * cos(p3);
+    dh_dz += k3.y * f3 * a3 * cos(p3);
 
-    // lambert + ao
-    color = color * (0.18 + diff * 0.82) * ao;
+    let normal = normalize(vec3<f32>(-dh_dx, 1.0, -dh_dz));
 
-    // specular contribution modulated by roughness
-    color += vec3<f32>(1.0) * spec * 0.5 * (1.0 - roughness);
+    // 2. Calculate Fresnel Term
+    // F = F0 + (1 - F0) * (1 - cos(theta))^5
+    // View vector
+    let viewDir = normalize(uScene.cameraPos.xyz - in.vWorldPos);
+    let NdotV = max(dot(normal, viewDir), 0.0);
+    let F0 = 0.02; // Reflectivity of water at normal incidence
+    let fresnel = F0 + (1.0 - F0) * pow(1.0 - NdotV, 5.0);
 
-    // additional foam in very shallow areas
-    let foam = smoothstep(0.0, 0.15, transmission);
-    color = mix(color, vec3<f32>(1.0), foam * 0.06);
+    // 3. Distort Reflection UVs based on Normal
+    // The distortion should be proportional to the normal's XY components
+    // Reduced strength to prevent sampling outside valid reflection area
+    let distortionStrength = 0.02; // Reduced from 0.05 to minimize artifacts
+    let distortion = normal.xz * distortionStrength;
 
-    // alpha: near surface more transparent, deep more opaque
-    let alphaShallow: f32 = 0.5;
-    let alphaDeep: f32 = 0.98;
-    let alpha = clamp(mix(alphaDeep, alphaShallow, transmission), 0.0, 1.0);
+    var reflectionUV = screenUV + distortion;
+    reflectionUV = clamp(reflectionUV, vec2<f32>(0.001), vec2<f32>(0.999));
 
-    color = clamp(color, vec3<f32>(0.0), vec3<f32>(1.0));
-    return vec4<f32>(color, alpha);
+    // 4. Sample Reflection
+    let reflectionColor = textureSample(reflectionTexture, samp, reflectionUV).rgb;
+
+    // 5. Water Color (Deep water absorption)
+    let deepWaterColor = vec3<f32>(0.05, 0.1, 0.2); // Dark blue-black
+    let shallowWaterColor = vec3<f32>(0.1, 0.3, 0.4); // Teal-ish
+
+    // Mix based on Fresnel: High Fresnel = More Reflection, Low Fresnel = More Water Color
+    // Also mix deep/shallow based on viewing angle (fake depth)
+    let waterBase = mix(deepWaterColor, shallowWaterColor, pow(1.0 - NdotV, 2.0));
+
+    let finalColor = mix(waterBase, reflectionColor, fresnel * 0.8 + 0.2); // Always keep some reflection
+
+    return vec4<f32>(finalColor, 1.0);
 }

@@ -11,7 +11,7 @@ async function main()
     const renderer = new Renderer(canvas);
     await renderer.initialize();
 
-    const camera = new Camera(canvas, renderer.device, renderer.bindGroupLayouts, renderer.fallbackResources, 70);
+    const camera = new Camera(canvas, renderer.device, renderer.bindGroupLayouts, renderer.fallbackResources, renderer.reflectionTextureView, 70);
 
     const scene = await initializeScene(renderer, camera);
 

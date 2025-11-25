@@ -35,6 +35,11 @@ export class BindGroupLayouts
                     binding: 2, // cubemap (skybox) texture
                     visibility: GPUShaderStage.FRAGMENT,
                     texture: { sampleType: "float", viewDimension: "cube" }
+                },
+                {
+                    binding: 3, // reflection texture (planar)
+                    visibility: GPUShaderStage.FRAGMENT,
+                    texture: { sampleType: "float" }
                 }
             ]
         });

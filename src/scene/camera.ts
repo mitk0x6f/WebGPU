@@ -1,6 +1,6 @@
 // scene/camera.ts
 
-import { mat4, vec3, quat } from 'gl-matrix';
+import { mat4, vec3, vec4, quat } from 'gl-matrix';
 
 import type { BindGroupLayouts } from '../core/bindgroup-layouts';
 import type { FallbackResources } from '../core/fallback-resources';
@@ -34,7 +34,10 @@ export class Camera
 
     private _cameraBuffer!: GPUBuffer;
 
-    public sceneBindGroup!: GPUBindGroup
+    public sceneBindGroup!: GPUBindGroup;
+    public reflectionSceneBindGroup!: GPUBindGroup;
+
+    private _clipPlane: vec4 | null = null;
 
     public get position(): vec3
     {
@@ -46,16 +49,27 @@ export class Camera
         vec3.copy(this._position, pos);
     }
 
+    public get yaw(): number { return this._yaw; }
+    public set yaw(v: number) { this._yaw = v; this._updateVectors(); }
+
+    public get pitch(): number { return this._pitch; }
+    public set pitch(v: number) { this._pitch = v; this._updateVectors(); }
+
     public get cameraBuffer(): GPUBuffer
     {
         return this._cameraBuffer;
     }
+
+    private readonly _bindGroupLayouts: BindGroupLayouts;
+    private readonly _fallbackResources: FallbackResources;
+    private _currentReflectionTextureView: GPUTextureView;
 
     constructor(
         canvas: HTMLCanvasElement,
         device: GPUDevice,
         bindGroupLayouts: BindGroupLayouts,
         fallbackResources: FallbackResources,
+        reflectionTextureView: GPUTextureView,
         fovY: number = 70,
         near: number = 0.1,
         far: number = 435.0 // Skybox is vec3 of variables(250), thus the far corner is calculated using multidimensional Pythagorean theorem and rounded up
@@ -63,6 +77,9 @@ export class Camera
     {
         this._canvas = canvas;
         this._device = device;
+        this._bindGroupLayouts = bindGroupLayouts;
+        this._fallbackResources = fallbackResources;
+        this._currentReflectionTextureView = reflectionTextureView;
         this._fovY = fovY;
         this._near = near;
         this._far = far;
@@ -77,13 +94,46 @@ export class Camera
             entries: [
                 { binding: 0, resource: { buffer: this._cameraBuffer } },
                 { binding: 1, resource: fallbackResources.defaultSampler },
-                { binding: 2, resource: fallbackResources.defaultTextureCubemapView }
+                { binding: 2, resource: fallbackResources.defaultTextureCubemapView },
+                { binding: 3, resource: reflectionTextureView }
+            ]
+        });
+
+        this.reflectionSceneBindGroup = device.createBindGroup({
+            layout: bindGroupLayouts.scene,
+            entries: [
+                { binding: 0, resource: { buffer: this._cameraBuffer } },
+                { binding: 1, resource: fallbackResources.defaultSampler },
+                { binding: 2, resource: fallbackResources.defaultTextureCubemapView },
+                { binding: 3, resource: fallbackResources.defaultTextureView } // Use dummy texture to avoid read-write hazard
             ]
         });
 
         this._updateVectors();
         this.update();
         this._initInputListeners();
+    }
+
+    public setReflectionTexture(view: GPUTextureView): void
+    {
+        if (this._currentReflectionTextureView === view) return;
+
+        this._currentReflectionTextureView = view;
+
+        this.sceneBindGroup = this._device.createBindGroup({
+            layout: this._bindGroupLayouts.scene,
+            entries: [
+                { binding: 0, resource: { buffer: this._cameraBuffer } },
+                { binding: 1, resource: this._fallbackResources.defaultSampler },
+                { binding: 2, resource: this._fallbackResources.defaultTextureCubemapView },
+                { binding: 3, resource: view }
+            ]
+        });
+    }
+
+    public setClipPlane(plane: vec4 | null): void
+    {
+        this._clipPlane = plane;
     }
 
     private _updateVectors(): void
@@ -127,6 +177,40 @@ export class Camera
 
         vec3.add(this._target, this._position, this._front);
         mat4.lookAt(this._viewMatrix, this._position, this._target, this._up);
+
+        // Oblique Near Plane Clipping
+        if (this._clipPlane)
+        {
+            // Transform clip plane to camera space
+            const clipPlaneCamera = vec4.create();
+            const invView = mat4.create();
+
+            mat4.invert(invView, this._viewMatrix);
+
+            const invTransView = mat4.create();
+
+            mat4.transpose(invTransView, invView);
+            vec4.transformMat4(clipPlaneCamera, this._clipPlane, invTransView);
+
+            // Calculate q
+            const q = vec4.create();
+            q[0] = (Math.sign(clipPlaneCamera[0]) + this._projMatrix[8]) / this._projMatrix[0];
+            q[1] = (Math.sign(clipPlaneCamera[1]) + this._projMatrix[9]) / this._projMatrix[5];
+            q[2] = -1.0;
+            q[3] = (1.0 + this._projMatrix[10]) / this._projMatrix[14];
+
+            // Calculate c
+            const c = vec4.create();
+            const dot = vec4.dot(clipPlaneCamera, q);
+            vec4.scale(c, clipPlaneCamera, 2.0 / dot);
+
+            // Replace 3rd column of projection matrix
+            this._projMatrix[2] = c[0];
+            this._projMatrix[6] = c[1];
+            this._projMatrix[10] = c[2] + 1.0;
+            this._projMatrix[14] = c[3];
+        }
+
         mat4.multiply(this._viewProjMatrix, this._projMatrix, this._viewMatrix);
 
         // Copy gl-matrix tuple data into Float32Array buffer

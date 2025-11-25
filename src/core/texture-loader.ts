@@ -7,7 +7,7 @@ export async function loadCubemapTexture(device: GPUDevice, name: string)
 
     for (const f of faces)
     {
-        const path = `textures/${name}/${f}.jpg`;
+        const path = `textures/${name}/${f}.png`;
         const res = await fetch(path);
 
         if (!res.ok) throw new Error(`Failed to fetch ${path}: ${res.status}`);

@@ -12,12 +12,18 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
 
 ## Features
 
-- **Advanced Water Rendering**: Dynamic water with displacement mapping, normal mapping, and depth-based coloring
+- **Advanced Water Rendering**:
+  - Real-time water reflections with oblique near-plane clipping
+  - Physically-based water shader with Fresnel effect
+  - Procedural wave normals for realistic distortion
+  - Water surface clipping for underwater objects
 - **Atmospheric Effects**: Dense fog and cloud systems for a creepy, immersive environment
 - **Dual Camera System**:
   - First-person fly camera for exploration
   - Third-person camera following a character controller
+  - Reflection camera with oblique projection
 - **WebGPU Rendering**: Modern GPU-accelerated graphics using WebGPU API
+- **Dynamic Skybox**: Cubemap-based environment with seamless reflection integration
 
 ---
 
@@ -69,7 +75,7 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
 ### TODO
 
 - [ ] Update the scene
-- - [ ] Make the water look blacker/creepy
+- - [X] Make the water look blacker/creepy
 - - [ ] Add dense fog
 - - [ ] Add dense clouds
 - [ ] Implement third-person character controller

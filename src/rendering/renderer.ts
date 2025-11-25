@@ -53,18 +53,22 @@ export class Renderer
             this._deviceManager.context,
             this.bindGroupLayouts,
             this.bufferManager,
-            this.fallbackResources
+            this.fallbackResources,
+            this.deviceFormat
         );
 
         this._deviceManager.onResizeCallback = (width, height) =>
         {
-            this._renderPassManager.resize(this.device, width, height);
+            this._renderPassManager.resize(this.device, width, height, this.deviceFormat);
         };
     }
 
     render(scene: Scene, camera: Camera, timestamp: number): void
     {
         this._frameCount++;
+
+        // Ensure camera has the latest reflection texture (e.g. after resize)
+        camera.setReflectionTexture(this._renderPassManager.reflectionView);
 
         // Use index assignment for slightly better performance, because .set() creates a temporary array
         this._frameData[0] = timestamp / 1000;
@@ -75,11 +79,22 @@ export class Renderer
         // Could be used without .buffer, but this way is safer
         this.device.queue.writeBuffer(this.bufferManager.frameBuffer, 0, this._frameData.buffer);
 
+        this._renderPassManager.renderReflection(
+            scene,
+            camera,
+            this._deviceManager.device
+        );
+
         this._renderPassManager.execute(
             scene,
             camera,
             this._deviceManager.device,
             this._deviceManager.context
         );
+    }
+
+    get reflectionTextureView(): GPUTextureView
+    {
+        return this._renderPassManager.reflectionView;
     }
 }

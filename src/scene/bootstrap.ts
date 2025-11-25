@@ -38,7 +38,7 @@ export async function initializeScene(renderer: Renderer, camera: Camera): Promi
 
     await material_skybox.initialize(renderer.device, pipelineManager);
 
-    const texture_skybox = await loadCubemapTexture(renderer.device, 'skybox');
+    const texture_skybox = await loadCubemapTexture(renderer.device, 'skybox2');
 
     // Update camera scene bind group with skybox texture
     camera.sceneBindGroup = renderer.device.createBindGroup({
@@ -46,9 +46,22 @@ export async function initializeScene(renderer: Renderer, camera: Camera): Promi
         entries: [
             { binding: 0, resource: { buffer: camera.cameraBuffer } },
             { binding: 1, resource: texture_skybox.sampler },
-            { binding: 2, resource: texture_skybox.view }
+            { binding: 2, resource: texture_skybox.view },
+            { binding: 3, resource: renderer.reflectionTextureView }
         ]
-    })
+    });
+
+    // Also update reflection bind group with skybox texture
+    camera.reflectionSceneBindGroup = renderer.device.createBindGroup({
+        layout: renderer.bindGroupLayouts.scene,
+        entries: [
+            { binding: 0, resource: { buffer: camera.cameraBuffer } },
+            { binding: 1, resource: texture_skybox.sampler },
+            { binding: 2, resource: texture_skybox.view },
+            { binding: 3, resource: renderer.fallbackResources.defaultTextureView } // Dummy to avoid hazard
+        ]
+    });
+
 
     const material_water = new Material({
         vertexShaderUrl: '../shaders/water/vert.wgsl',
@@ -61,7 +74,7 @@ export async function initializeScene(renderer: Renderer, camera: Camera): Promi
             renderer.bindGroupLayouts.material
         ],
         colorFormat: renderer.deviceFormat,
-        translucent: true
+        translucent: false // Opaque mirror-like surface
     });
 
     await material_water.initialize(renderer.device, pipelineManager);
@@ -111,6 +124,7 @@ export async function initializeScene(renderer: Renderer, camera: Camera): Promi
     skybox.scale = Float32Array.from([500, 500, 500]);
 
     const water = scene.createQuad(material_water);
+    water.name = 'water'; // TODO: Make water a separate class, so we can omit Renderable.name
     // ! AND FROM HERE
     water.materialBindGroup = renderer.device.createBindGroup({
         layout: renderer.bindGroupLayouts.material,
@@ -135,9 +149,6 @@ export async function initializeScene(renderer: Renderer, camera: Camera): Promi
 
     const cube3 = scene.createCube(material_cube);
     cube3.position = Float32Array.from([2, -2, 0]);
-
-    const cube4 = scene.createCube(material_cube);
-    cube4.position = Float32Array.from([0, -20, -35]);
 
     return scene;
 }
