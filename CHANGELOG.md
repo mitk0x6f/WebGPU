@@ -4,7 +4,69 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.2.0] - 2026-01-13
+
+### 🚀 Core Engine
+
+- **Grouping System**: Implemented simple object organization
+  - Optional `groupId` property on all renderables
+  - `GroupManager` utility with O(1) group lookups
+  - Explicit assignment API: `scene.groupManager.assign(object, groupId)`
+  - Scene-level convenience methods: `getMeshesByGroup()`, `setGroupVisibility()`
+  - Foundation for future ECS architecture migration
+
+- **Optimization**:
+  - Defined build-time constants in `src/core/math-constants.ts`
+  - Replaced selected runtime divisions with multiplications or built-time constants
+
+### 🎮 Input & Camera
+
+- **Third-Person Camera Controller**:
+  - Implemented `Over-the-shoulder` style view
+  - Added camera smoothing (lerp) for rotation and pitch
+  - Added configurable parameters for `height`, `pitch`, `shoulder offset`, and `smoothing`
+- **Character Controller**:
+  - Integrated `three.js FBXLoader` for FBX models
+  - Implemented basic `WASD` movement relative to camera view with the following control scheme:
+  - - `W`: Move forward
+  - - `S` Move backwards
+  - - `A` Rotate left (CCW)
+  - - `D` Rotate right (CW)
+  - - `Q` Move left
+  - - `E` Move right
+  - - `Mouse`: Hold left mouse button and move mouse to look around
+- **Free Flight Camera**: Unchanged
+  - Control scheme:
+  - - `W`: Move forward
+  - - `S`: Move backwards
+  - - `A`: Move left
+  - - `D`: Move right
+  - - `Q`: Move down
+  - - `E`: Move up
+  - - `Mouse`: Hold left mouse button and move mouse to look around
+
+### 📦 Asset Pipeline
+
+- Added support for loading FBX models
+- Implemented model scaling and rotation adjustments during load
+
+### 🧰 Build & Platform
+
+- Project structure adjusted:
+  - `public/`:
+  - - `models/`: FBX models `NEW`
+
+### 📖 Documentation
+
+- Update `Features` and `TODO` sections in `README.md`
+- Update formatting for `0.1.1` patch notes in `CHANGELOG.md`
+
+---
+
 ## [0.1.1] - 2025-11-25
+
+<details>
+  <summary>View</summary>
 
 ### 🚀 Core Engine
 
@@ -38,24 +100,29 @@ All notable changes to this project will be documented in this file.
 
 ### 💡 Lighting & Environment
 
-- Updated skybox assets (skybox2)
+- Updated skybox `skybox2` assets
 - Reflection integration with skybox cubemap
 - Reduced reflection clear color artifacts
 - Adjusted distortion strength for cleaner reflections
 
 ### 🧰 Build & Platform
 
-- Texture loader updated for PNG format cubemaps
+- Texture loader updated for `PNG` format cubemaps
 
 ### 📖 Documentation
 
-- Updated README.md with reflection features
+- Updated `README.md` with reflection features
 - Added TODOs for water height uniform system
 - Code comments for oblique projection implementation
+
+</details>
 
 ---
 
 ## [0.1.0] - 2025-11-21
+
+<details>
+  <summary>View</summary>
 
 ### 🚀 Core Engine
 
@@ -98,6 +165,8 @@ All notable changes to this project will be documented in this file.
   - - `shaders/`: WGSL shader files.
   - `public/`: Static assets including textures (skybox, water).
   - - `textures/`: Textures for skybox, water, and other assets.
+
+</details>
 
 ---
 

@@ -1,4 +1,4 @@
-![Version](https://img.shields.io/badge/Version-0.1.0-blue)
+![Version](https://img.shields.io/badge/Version-0.2.0-blue)
 ![WIP](https://img.shields.io/badge/Work_In_Progress-yellow)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
@@ -12,18 +12,29 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
 
 ## Features
 
+- **WebGPU Rendering**: Modern GPU-accelerated graphics using WebGPU API
+- **Dynamic Skybox**: Cubemap-based environment with seamless reflection integration
 - **Advanced Water Rendering**:
   - Real-time water reflections with oblique near-plane clipping
   - Physically-based water shader with Fresnel effect
   - Procedural wave normals for realistic distortion
   - Water surface clipping for underwater objects
 - **Atmospheric Effects**: Dense fog and cloud systems for a creepy, immersive environment
-- **Dual Camera System**:
-  - First-person fly camera for exploration
-  - Third-person camera following a character controller
+- **Character Controller** (In Development):
+  - Third-person character movement with `WASD` + `QE` + `mouse` controls
+  - State machine (idle, walk)
+  - Smooth acceleration / deceleration curves
+  - Ground detection and slope handling
+  - Input action mapping system
+- **Camera System** (In Development):
   - Reflection camera with oblique projection
-- **WebGPU Rendering**: Modern GPU-accelerated graphics using WebGPU API
-- **Dynamic Skybox**: Cubemap-based environment with seamless reflection integration
+  - Dual camera modes with seamless switching
+  - First-person free-flight camera for exploration
+  - Third-person camera with spring arm system
+  - Camera smoothing (position and rotation lerp/slerp)
+  - Collision detection (prevents clipping through geometry)
+  - Look-at smoothing and FOV transitions
+  - Camera shake support
 
 ---
 
@@ -74,14 +85,29 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
 
 ### TODO
 
-- [ ] Update the scene
-- - [X] Make the water look blacker/creepy
-- - [ ] Add dense fog
-- - [ ] Add dense clouds
-- [ ] Implement third-person character controller
-- [ ] Implement third-person camera
-- [ ] Dual camera system with switching capability
-- [ ] Performance optimization
+- [ ] Enhance scene visuals
+  - [X] Add darker / creepier water appearance
+  - [ ] Add dense fog
+  - [ ] Add dense clouds
+- [x] Implement character controller
+  - [x] FBX model loader
+  - [x] Basic character movement `WASD` + `QE`
+  - [ ] Character state machine (idle, walk)
+  - [ ] Smooth acceleration/deceleration curves
+  - [ ] Ground detection and snapping
+  - [ ] Slope handling
+  - [ ] Input action mapping
+- [x] Implement camera system
+  - [x] Refactor camera into base class + controllers
+  - [x] Third-person camera controller
+  - [x] Camera mode switching `Tab`
+  - [x] Position/rotation smoothing (lerp/slerp)
+  - [ ] Spring arm system for dynamic distance
+  - [ ] Camera collision detection
+  - [ ] Look-at smoothing
+  - [ ] FOV transitions
+  - [ ] Camera shake system
+- [ ] Optimize performance
 - [ ] Add LICENSE.md
 
 ### COMPLETED

@@ -1,14 +1,16 @@
 // scene/bootstrap.ts
 
-import { vertexFormatPositionNormalUV } from '../core/vertex-formats';
-import { Camera } from './camera';
-import { Material } from './material';
+import { loadMeshFromFBX } from '../core/model-loader';
 import { loadCubemapTexture, loadMaterialTextures } from '../core/texture-loader';
+import { vertexFormatPositionNormalUV } from '../core/vertex-formats';
 import { Renderer } from '../rendering/renderer';
+import { BaseCamera } from './camera/base-camera';
+import { Character } from './character';
+import { Material } from './material';
 import { PipelineManager } from './pipeline-manager';
 import { Scene } from './scene';
 
-export async function initializeScene(renderer: Renderer, camera: Camera): Promise<Scene>
+export async function initializeScene(renderer: Renderer, camera: BaseCamera): Promise<{ scene: Scene, character: Character }>
 {
     camera.position = [0, 1, 7];
 
@@ -126,7 +128,7 @@ export async function initializeScene(renderer: Renderer, camera: Camera): Promi
     const water = scene.createQuad(material_water);
     water.name = 'water'; // TODO: Make water a separate class, so we can omit Renderable.name
     // ! AND FROM HERE
-    water.materialBindGroup = renderer.device.createBindGroup({
+    water.materialBindGroups = [renderer.device.createBindGroup({
         layout: renderer.bindGroupLayouts.material,
         entries: [
             { binding: 0, resource: texture_water.color?.sampler ?? renderer.fallbackResources.defaultSampler },
@@ -137,24 +139,82 @@ export async function initializeScene(renderer: Renderer, camera: Camera): Promi
             { binding: 5, resource: texture_water.roughness?.view ?? renderer.fallbackResources.defaultTextureView },
             { binding: 6, resource: { buffer: material_water_uniform_buffer ?? renderer.fallbackResources.defaultMaterialUniformBuffer } }
         ]
-    })
+    })];
     // ! TO HERE
     water.scale = Float32Array.from([texture_water_stretch_x, 1, texture_water_stretch_y]);
 
-    const cube1 = scene.createCube(material_cube);
-    cube1.position = Float32Array.from([-2, 0, 0]);
+    const chunk = 3;
 
-    const cube2 = scene.createCube(material_cube);
-    cube2.position = Float32Array.from([0, -0.5, 0]);
+    for (let x = 0; x < chunk; x++)
+    {
+        for (let y = 0; y < chunk; y++)
+        {
+            for (let z = 0; z < chunk; z++)
+            {
+                const cube = scene.createCube(material_cube);
+                // Position cubes in a 10x10x10 grid centered at origin
+                cube.position = Float32Array.from([
+                    5 + x - chunk * 0.5 + 0.5,  // Center X around origin
+                    3 + y - chunk * 0.5 + 0.5,  // Center Y around origin
+                    -15 - z - chunk * 0.5 + 0.5   // Center Z around origin
+                ]);
+                // Assign all cubes to a single group
+                scene.groupManager.assign(cube, 2);
+            }
+        }
+    }
 
-    const cube3 = scene.createCube(material_cube);
-    cube3.position = Float32Array.from([2, -2, 0]);
+    // Load Character
+    const material_standard = new Material({
+        vertexShaderUrl: '../shaders/cube/vert.wgsl', // Reusing cube vertex shader as it provides standard attributes
+        fragmentShaderUrl: '../shaders/standard/frag.wgsl',
+        vertexLayout: vertexFormatPositionNormalUV,
+        bindGroupLayouts: [
+            renderer.bindGroupLayouts.frame,
+            renderer.bindGroupLayouts.scene,
+            renderer.bindGroupLayouts.model,
+            renderer.bindGroupLayouts.material
+        ],
+        colorFormat: renderer.deviceFormat
+    });
 
-    return scene;
+    await material_standard.initialize(renderer.device, pipelineManager);
+
+    // Load Character
+    const characterMesh = await loadMeshFromFBX(renderer.device, 'models/character.fbx', renderer.bindGroupLayouts, renderer.fallbackResources);
+    scene.addMesh(characterMesh, material_standard);
+
+    const character = new Character(characterMesh);
+    // TODO: Find out how is character initial position defined
+    character.position[1] = -0.5; // Water level
+    character.mesh.scale = Float32Array.from([0.01, 0.01, 0.01]);
+
+    // Assign skybox and water to a single group
+    scene.groupManager.assign(skybox, 1);
+    scene.groupManager.assign(water, 1);
+    // Assign character to group 3
+    scene.groupManager.assign(characterMesh, 3);
+    return { scene, character };
 }
 
-export function updateScene(scene: Scene, camera: Camera, deltaTime: number): void
+// TODO: Remove the underscore from deltaTime parameter when it's in use
+export function updateScene(scene: Scene, camera: BaseCamera, globalTime: number, _deltaTime: number): void
 {
+    const characterMesh = scene.getMeshesByGroup(3);
+
+    const hStart = -0.4;
+    const hEnd = -0.3;
+    const speed = 0.001;
+
+    for (let i = 0; i < characterMesh.length; i++)
+    {
+        const character = characterMesh[i];
+
+        const t = (Math.sin(globalTime * speed) + 1) * 0.5;
+
+        character.position[1] = hStart + t * (hEnd - hStart);
+    }
+
     for (const mesh of scene.meshes)
     {
         if (!mesh.visible) continue;
@@ -167,6 +227,4 @@ export function updateScene(scene: Scene, camera: Camera, deltaTime: number): vo
         scene.skybox.position.set(camera.position);
         scene.skybox.updateModelMatrix(scene.device);
     }
-
-    camera.update(deltaTime);
 }

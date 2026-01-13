@@ -2,6 +2,7 @@
 
 import type { BindGroupLayouts } from '../core/bindgroup-layouts';
 import type { FallbackResources } from '../core/fallback-resources';
+import { GroupManager } from './renderables/group-manager';
 import { Mesh } from './renderables/mesh';
 import { Skybox } from './renderables/skybox';
 import type { Material } from './material';
@@ -14,6 +15,8 @@ export class Scene
     private readonly _bindGroupLayouts: BindGroupLayouts;
     private readonly _fallbackResources: FallbackResources;
 
+    public readonly groupManager: GroupManager;
+
     constructor(
         device: GPUDevice,
         bindGroupLayouts: BindGroupLayouts,
@@ -23,6 +26,7 @@ export class Scene
         this._device = device;
         this._bindGroupLayouts = bindGroupLayouts;
         this._fallbackResources = fallbackResources;
+        this.groupManager = new GroupManager();
     }
 
     get meshes(): Mesh[]
@@ -38,6 +42,21 @@ export class Scene
     get device(): GPUDevice
     {
         return this._device;
+    }
+
+    /**
+     * @param groupId - If undefined, returns all meshes
+     */
+    getMeshesByGroup(groupId?: number): Mesh[]
+    {
+        if (groupId === undefined) return this._meshes;
+
+        return this.groupManager.getGroup(groupId).filter(r => r.type === 'mesh') as Mesh[];
+    }
+
+    setGroupVisibility(groupId: number, visible: boolean): void
+    {
+        this.groupManager.setGroupVisibility(groupId, visible);
     }
 
     createSkybox(material: Material): Skybox
@@ -122,7 +141,7 @@ export class Scene
 
         mesh.translucent = material.descriptor.translucent ?? false;
 
-        mesh.materialBindGroup = this._fallbackResources.materialBindGroup;
+        mesh.materialBindGroups = [this._fallbackResources.materialBindGroup];
 
         this._meshes.push(mesh);
 
@@ -184,17 +203,32 @@ export class Scene
 
         mesh.setPipeline(material.pipeline);
 
-        mesh.materialBindGroup = this._fallbackResources.materialBindGroup;
+        mesh.materialBindGroups = [this._fallbackResources.materialBindGroup];
 
         this._meshes.push(mesh);
 
         return mesh;
     }
 
+    addMesh(mesh: Mesh, material: Material): void
+    {
+        mesh.setPipeline(material.pipeline);
+
+        // If mesh has no materials assigned by loader, use fallback
+        if (mesh.materialBindGroups.length === 0)
+        {
+            mesh.materialBindGroups = [this._fallbackResources.materialBindGroup];
+        }
+
+        this._meshes.push(mesh);
+    }
+
     destroy(): void
     {
         for (const mesh of this._meshes)
         {
+            this.groupManager.unassign(mesh);
+
             mesh.destroy();
         }
 
@@ -202,8 +236,12 @@ export class Scene
 
         if (this._skybox)
         {
+            this.groupManager.unassign(this._skybox);
+
             this._skybox.destroy();
             this._skybox = null;
         }
+
+        this.groupManager.clear();
     }
 }

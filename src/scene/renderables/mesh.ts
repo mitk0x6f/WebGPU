@@ -8,6 +8,12 @@ import { BindGroupIndex } from "../../core/bindgroup-indices";
 import type { BindGroupLayouts } from "../../core/bindgroup-layouts";
 import { Renderable } from "./renderable";
 
+export interface SubMesh {
+    start: number;
+    count: number;
+    materialIndex: number;
+}
+
 export class Mesh extends Renderable
 {
     private _vertexBuffer!: GPUBuffer;
@@ -23,7 +29,8 @@ export class Mesh extends Renderable
 
     public readonly type = 'mesh';
     public translucent: boolean = false;
-    public materialBindGroup!: GPUBindGroup;
+    public materialBindGroups: GPUBindGroup[] = [];
+    public subMeshes: SubMesh[] = [];
     public pipeline: GPURenderPipeline | null = null;
 
     get indexCount(): number
@@ -35,7 +42,8 @@ export class Mesh extends Renderable
         device: GPUDevice,
         bindGroupLayout: BindGroupLayouts,
         vertexData: Float32Array,
-        indexData: Uint16Array,
+        indexData: Uint16Array | Uint32Array,
+        subMeshes: SubMesh[] = []
     )
     {
         super();
@@ -60,15 +68,29 @@ export class Mesh extends Renderable
         new Float32Array(this._vertexBuffer.getMappedRange()).set(vertexData);
         this._vertexBuffer.unmap();
 
+        // Calculate padded size (must be multiple of 4)
+        const indexByteLength = indexData.byteLength;
+        const paddedIndexByteLength = (indexByteLength + 3) & ~3;
+
         this._indexBuffer = device.createBuffer({
-            size: indexData.byteLength,
+            size: paddedIndexByteLength,
             usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
             mappedAtCreation: true
         });
-        new Uint16Array(this._indexBuffer.getMappedRange()).set(indexData);
+
+        if (indexData instanceof Uint16Array)
+        {
+            new Uint16Array(this._indexBuffer.getMappedRange(), 0, indexData.length).set(indexData);
+        }
+        else
+        {
+            new Uint32Array(this._indexBuffer.getMappedRange(), 0, indexData.length).set(indexData);
+        }
+
         this._indexBuffer.unmap();
 
         this._indexCount = indexData.length;
+        this.subMeshes = subMeshes;
     }
 
     updateModelMatrix(device: GPUDevice): void
@@ -97,7 +119,10 @@ export class Mesh extends Renderable
     bind(pass: GPURenderPassEncoder): void
     {
         pass.setVertexBuffer(0, this._vertexBuffer);
-        pass.setIndexBuffer(this._indexBuffer, 'uint16');
+
+        // Determine index format based on buffer size and count
+        // If size / count == 4, it's uint32, otherwise uint16
+        pass.setIndexBuffer(this._indexBuffer, (this._indexBuffer.size / this._indexCount) === 4 ? 'uint32' : 'uint16');
 
         pass.setBindGroup(BindGroupIndex.Model, this._modelBindGroup);
     }

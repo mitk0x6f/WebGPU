@@ -1,11 +1,11 @@
 // rendering/renderer.ts
 
-import { Scene } from '../scene/scene';
-import { Camera } from '../scene/camera';
 import { DeviceManager } from '../core/device-manager';
 import { BufferManager } from '../core/buffer-manager';
 import { BindGroupLayouts } from '../core/bindgroup-layouts';
 import { FallbackResources } from '../core/fallback-resources';
+import { BaseCamera } from '../scene/camera/base-camera';
+import { Scene } from '../scene/scene';
 import { RenderPassManager } from './render-pass-manager';
 
 export class Renderer
@@ -63,7 +63,7 @@ export class Renderer
         };
     }
 
-    render(scene: Scene, camera: Camera, timestamp: number): void
+    render(scene: Scene, camera: BaseCamera, timestamp: number): void
     {
         this._frameCount++;
 
@@ -71,7 +71,7 @@ export class Renderer
         camera.setReflectionTexture(this._renderPassManager.reflectionView);
 
         // Use index assignment for slightly better performance, because .set() creates a temporary array
-        this._frameData[0] = timestamp / 1000;
+        this._frameData[0] = timestamp * 0.001;
         this._frameData[1] = this._frameCount;
         this._frameData[2] = this._deviceManager.context.canvas.width;
         this._frameData[3] = this._deviceManager.context.canvas.height;

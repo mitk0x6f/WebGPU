@@ -1,12 +1,13 @@
 // rendering/render-pass-manager.ts
 
 import { vec3 } from 'gl-matrix';
-import { BindGroupLayouts } from '../core/bindgroup-layouts';
-import { FallbackResources } from '../core/fallback-resources';
+
 import { BindGroupIndex } from '../core/bindgroup-indices';
+import { BindGroupLayouts } from '../core/bindgroup-layouts';
 import type { BufferManager } from '../core/buffer-manager';
+import { FallbackResources } from '../core/fallback-resources';
+import { BaseCamera } from "../scene/camera/base-camera";
 import { Mesh } from '../scene/renderables/mesh';
-import { Camera } from '../scene/camera';
 import { Scene } from '../scene/scene';
 
 export class RenderPassManager
@@ -78,7 +79,7 @@ export class RenderPassManager
 
     renderReflection(
         scene: Scene,
-        camera: Camera,
+        camera: BaseCamera,
         device: GPUDevice
     ): void
     {
@@ -100,7 +101,7 @@ export class RenderPassManager
         camera.position = vec3.fromValues(originalPos[0], mirroredY, originalPos[2]);
         camera.pitch = -originalPitch;
 
-        camera.update();
+        camera.updateMatrices();
 
         // Update skybox position for reflection camera
         if (scene.skybox)
@@ -166,18 +167,26 @@ export class RenderPassManager
         // Render all meshes except water (simple mirror)
         for (const mesh of scene.meshes)
         {
-            if (!mesh.visible || !mesh.pipeline || mesh.name === 'water') continue; // TODO: Make water a separate class, so we can omit Renderable.name
+            if (!mesh.visible || !mesh.pipeline || mesh.name === 'water') continue;
 
             passMeshes.setPipeline(mesh.pipeline);
 
             mesh.bind(passMeshes);
 
-            if (mesh instanceof Mesh)
+            if (mesh.subMeshes.length > 0)
             {
-                passMeshes.setBindGroup(BindGroupIndex.Material, mesh.materialBindGroup);
+                for (const subMesh of mesh.subMeshes)
+                {
+                    const bindGroup = mesh.materialBindGroups[subMesh.materialIndex] || mesh.materialBindGroups[0];
+                    passMeshes.setBindGroup(BindGroupIndex.Material, bindGroup);
+                    passMeshes.drawIndexed(subMesh.count, 1, subMesh.start, 0, 0);
+                }
             }
-
-            passMeshes.drawIndexed(mesh.indexCount);
+            else
+            {
+                passMeshes.setBindGroup(BindGroupIndex.Material, mesh.materialBindGroups[0]);
+                passMeshes.drawIndexed(mesh.indexCount);
+            }
         }
 
         passMeshes.end();
@@ -188,7 +197,7 @@ export class RenderPassManager
         camera.position = originalPos;
         camera.pitch = originalPitch;
         camera.yaw = originalYaw;
-        camera.update();
+        camera.updateMatrices();
 
         // Restore skybox position to original camera position
         if (scene.skybox)
@@ -200,7 +209,7 @@ export class RenderPassManager
 
     execute(
         scene: Scene,
-        camera: Camera,
+        camera: BaseCamera,
         device: GPUDevice,
         context: GPUCanvasContext
     ): void
@@ -264,12 +273,20 @@ export class RenderPassManager
 
             mesh.bind(pass);
 
-            if (mesh instanceof Mesh)
+            if (mesh.subMeshes.length > 0)
             {
-                pass.setBindGroup(BindGroupIndex.Material, mesh.materialBindGroup);
+                for (const subMesh of mesh.subMeshes)
+                {
+                    const bindGroup = mesh.materialBindGroups[subMesh.materialIndex] || mesh.materialBindGroups[0];
+                    pass.setBindGroup(BindGroupIndex.Material, bindGroup);
+                    pass.drawIndexed(subMesh.count, 1, subMesh.start, 0, 0);
+                }
             }
-
-            pass.drawIndexed(mesh.indexCount);
+            else
+            {
+                pass.setBindGroup(BindGroupIndex.Material, mesh.materialBindGroups[0]);
+                pass.drawIndexed(mesh.indexCount);
+            }
         }
 
         // Sort translucent meshes from back to front by distance to camera
@@ -291,12 +308,20 @@ export class RenderPassManager
 
             mesh.bind(pass);
 
-            if (mesh instanceof Mesh)
+            if (mesh.subMeshes.length > 0)
             {
-                pass.setBindGroup(BindGroupIndex.Material, mesh.materialBindGroup);
+                for (const subMesh of mesh.subMeshes)
+                {
+                    const bindGroup = mesh.materialBindGroups[subMesh.materialIndex] || mesh.materialBindGroups[0];
+                    pass.setBindGroup(BindGroupIndex.Material, bindGroup);
+                    pass.drawIndexed(subMesh.count, 1, subMesh.start, 0, 0);
+                }
             }
-
-            pass.drawIndexed(mesh.indexCount);
+            else
+            {
+                pass.setBindGroup(BindGroupIndex.Material, mesh.materialBindGroups[0]);
+                pass.drawIndexed(mesh.indexCount);
+            }
         }
 
         pass.end();
