@@ -1,4 +1,4 @@
-![Version](https://img.shields.io/badge/Version-0.2.0-blue)
+![Version](https://img.shields.io/badge/Version-0.2.1-blue)
 ![WIP](https://img.shields.io/badge/Work_In_Progress-yellow)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
@@ -22,6 +22,9 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
 - **Atmospheric Effects**: Dense fog and cloud systems for a creepy, immersive environment
 - **Character Controller** (In Development):
   - Third-person character movement with `WASD` + `QE` + `mouse` controls
+  - Advanced camera-independent steering and right-click rotation (rotate character while mouse dragging)
+  - Character model smoothly catches up to camera heading when right-click is held
+  - Strafe movement with `A` and `D` while holding right mouse button
   - State machine (idle, walk)
   - Smooth acceleration / deceleration curves
   - Ground detection and slope handling
@@ -30,8 +33,9 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
   - Reflection camera with oblique projection
   - Dual camera modes with seamless switching
   - First-person free-flight camera for exploration
-  - Third-person camera with spring arm system
-  - Camera smoothing (position and rotation lerp/slerp)
+  - Third-person camera with fully decoupled absolute orbit architecture and spring arm system
+  - Zero-allocation update loops (cached vectors) for ultra-responsive stutter-free performance
+  - Camera smoothing (position and rotation lerp/slerp) with intelligent momentum stops
   - Collision detection (prevents clipping through geometry)
   - Look-at smoothing and FOV transitions
   - Camera shake support

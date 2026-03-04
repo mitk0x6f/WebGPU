@@ -42,7 +42,9 @@ export class FreeCameraController
         if (input.isKeyPressed('e')) vec3.scaleAndAdd(pos, pos, up, velocity);
 
         // Mouse rotation
-        if (input.getMouseButtons() === 1) // Left click
+        const buttons = input.getMouseButtons();
+
+        if ((buttons & 1) || (buttons & 2))
         {
             const delta = input.consumeMouseDelta();
             this._camera.yaw += delta.x * this._sensitivity;

@@ -27,64 +27,114 @@ export class ThirdPersonCameraController
     private _currentDistance = 2.5;
 
     // * Smoothing Configuration
-    // Controls how quickly the camera follows the target rotation.
     // Higher = Snappier/Faster. Lower = Smoother/Laggy.
-    // 10.0 = Very Snappy. 4.0 = Balanced. 1.0 = Very Slow.
-    private readonly SMOOTH_FACTOR = 4.0;
-    // Internal state for smoothing
-    private _yawOffset = 0;
-    private _currentYaw = 0;
-    private _currentPitch = -10;
+    private readonly SMOOTH_FACTOR = 18.0;
+
+    // Target orbit values (where input intends to go)
+    private _targetOrbitYaw = 0;
+    private _targetOrbitPitch = -10;
+
+    // Current smoothed orbit values (where the camera actually is)
+    private _currentOrbitYaw = 0;
+    private _currentOrbitPitch = -10;
+
+    // Tracks previous buttons state to detect when a mouse button is released
+    private _previousButtons = 0;
+
+    // Target for character smoothly aligning to camera
+    private _characterTargetYaw: number | null = null;
+
+    // Cached vector objects to prevent memory allocation / Garbage Collection every frame
+    private readonly _tempCameraPos = vec3.create();
+    private readonly _tempTargetPivot = vec3.create();
+    private readonly _tempFront = vec3.create();
 
     constructor(camera: BaseCamera, target: Character)
     {
         this._camera = camera;
         this._target = target;
 
-        // Initialize smoothed values to avoid initial pop
-        this._currentYaw = this._target.rotation;
-        this._currentPitch = this._pitch;
+        // Initialize to character's starting rotation so we start behind them
+        this._targetOrbitYaw = this._target.rotation;
+        this._currentOrbitYaw = this._targetOrbitYaw;
+
+        this._targetOrbitPitch = this._pitch;
+        this._currentOrbitPitch = this._targetOrbitPitch;
     }
+
 
     public update(deltaTime: number, input: InputManager): void
     {
-        // Mouse rotation (orbits around character)
-        if (input.getMouseButtons() === 1)
+        const buttons = input.getMouseButtons();
+
+        // Check if right click was just released
+        const rightClickReleased = (this._previousButtons & 2) !== 0 && (buttons & 2) === 0;
+
+        // If right drag just ended, immediately snap the target to the current position
+        // to stop any residual smooth momentum on the camera.
+        if (rightClickReleased)
+        {
+            this._targetOrbitYaw = this._currentOrbitYaw;
+            this._targetOrbitPitch = this._currentOrbitPitch;
+        }
+
+        // Mouse rotation
+        if ((buttons & 1) || (buttons & 2))
         {
             const delta = input.consumeMouseDelta();
 
-            this._yawOffset -= delta.x * 0.3; // Mouse Right -> Orbit Left -> Look Right
-            this._pitch -= delta.y * 0.3; // Mouse Up -> Pitch Decrease -> Camera Down -> Look Up
-            this._pitch = Math.max(-89, Math.min(89, this._pitch));
+            // Both left and right click change pitch (up/down)
+            this._targetOrbitPitch -= delta.y * 0.3; // Mouse Up -> Pitch Decrease -> Camera Down -> Look Up
+            this._targetOrbitPitch = Math.max(-89, Math.min(89, this._targetOrbitPitch));
+
+            // Orbit Yaw (Left/Right)
+            this._targetOrbitYaw -= delta.x * 0.3;
+
+            // If right-clicking, track the camera orientation for character smoothly catching up
+            if (buttons & 2) this._characterTargetYaw = this._targetOrbitYaw;
         }
         else
         {
             input.consumeMouseDelta();
+
+            // Keyboard rotation (A/D) when no mouse buttons are pressed
+            // Matches character's hardcoded rotation speed (120 deg/s)
+            const dt = deltaTime * 0.001;
+
+            // If they start using A/D, cancel any residual character smooth alignment
+            if (input.isKeyPressed('a') || input.isKeyPressed('d'))
+            {
+                this._characterTargetYaw = null;
+
+                if (input.isKeyPressed('a')) this._targetOrbitYaw += 120 * dt;
+                if (input.isKeyPressed('d')) this._targetOrbitYaw -= 120 * dt;
+            }
         }
 
-        // Reset rotation offset when rotating character
-        if (input.isKeyPressed('q') || input.isKeyPressed('e'))
+        // Smoothly rotate the character model to catch up
+        if (this._characterTargetYaw !== null)
         {
-            this._yawOffset = 0;
+            const charT = 1.0 - Math.pow(0.001, deltaTime * 0.001 * 12.0); // Fast but smooth catch-up speed
+            this._target.rotation = this.lerpAngle(this._target.rotation, this._characterTargetYaw, charT);
+
+            // Stop tracking if we're super close
+            let charDiff = (this._characterTargetYaw - this._target.rotation) % 360;
+
+            if (charDiff < -180) charDiff += 360;
+            if (charDiff > 180) charDiff -= 360;
+            if (Math.abs(charDiff) < 0.1) this._characterTargetYaw = null;
         }
 
-        // Target values
-        const targetTotalYaw = this._target.rotation + this._yawOffset;
-        const targetPitch = this._pitch;
+        this._previousButtons = buttons;
 
-        // Smoothly interpolate current values towards target values
-        // We use lerpAngle for yaw to handle 360-degree wrapping correctly if needed,
-        // but simple lerp is fine here as we don't wrap strictly.
-        // Actually, simple lerp on angles can be bad if we cross 360, but our rotation is continuous.
-
-        // Time-corrected lerp factor
+        // Time-corrected lerp factor for smooth rotation frame-rate independence
         const t = 1.0 - Math.pow(0.001, deltaTime * 0.001 * this.SMOOTH_FACTOR);
 
-        this._currentYaw = this.lerp(this._currentYaw, targetTotalYaw, t);
-        this._currentPitch = this.lerp(this._currentPitch, targetPitch, t);
+        this._currentOrbitYaw = this.lerpAngle(this._currentOrbitYaw, this._targetOrbitYaw, t);
+        this._currentOrbitPitch = this.lerp(this._currentOrbitPitch, this._targetOrbitPitch, t);
 
-        const radYaw = this._currentYaw * DEG_TO_RAD;
-        const radPitch = this._currentPitch * DEG_TO_RAD;
+        const radYaw = this._currentOrbitYaw * DEG_TO_RAD;
+        const radPitch = this._currentOrbitPitch * DEG_TO_RAD;
 
         // Calculate offset from target
 
@@ -107,7 +157,7 @@ export class ThirdPersonCameraController
         const shoulderOffsetX = rightX * this._shoulderOffset;
         const shoulderOffsetZ = rightZ * this._shoulderOffset;
 
-        const cameraPos = vec3.create();
+        const cameraPos = this._tempCameraPos;
         // Position = Target + ShoulderOffset + OrbitOffset
         cameraPos[0] = this._target.position[0] + shoulderOffsetX + orbitOffsetX;
         cameraPos[1] = this._target.position[1] + this._height + vDist;
@@ -117,17 +167,20 @@ export class ThirdPersonCameraController
         // but smoothing the angles usually feels better for orbit.
         // Let's stick to angle smoothing for now.
 
-        this._camera.position = cameraPos;
+        // We copy it into the camera's position array so we don't accidentally mutate it elsewhere
+        // (though in this design we could just reference it, but safety first!).
+        vec3.copy(this._camera.position as vec3, cameraPos);
 
         // Look at target pivot (Target + ShoulderOffset + Height)
         // This keeps the character on the left side of the screen
-        const targetPivot = vec3.clone(this._target.position);
+        const targetPivot = this._tempTargetPivot;
+        vec3.copy(targetPivot, this._target.position);
         targetPivot[0] += shoulderOffsetX;
         targetPivot[1] += this._height;
         targetPivot[2] += shoulderOffsetZ;
 
         // Calculate vector from camera to target pivot
-        const front = vec3.create();
+        const front = this._tempFront;
         vec3.sub(front, targetPivot, cameraPos);
         vec3.normalize(front, front);
 
@@ -150,5 +203,15 @@ export class ThirdPersonCameraController
     private lerp(start: number, end: number, t: number): number
     {
         return start * (1 - t) + end * t;
+    }
+
+    private lerpAngle(start: number, end: number, t: number): number
+    {
+        let diff = (end - start) % 360;
+
+        if (diff < -180) diff += 360;
+        if (diff > 180) diff -= 360;
+
+        return start + diff * t;
     }
 }

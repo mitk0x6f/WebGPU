@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.2.1] - 2026-03-04
+
+### 🎮 Input & Camera
+
+- **Third-Person Camera**:
+  - **Camera Overhaul**: Implemented a fully decoupled absolute orbit architecture.
+  - Advanced smoothing mechanics: camera retains momentum on left click release, but dead-stops instantly on right click release.
+  - Camera follows character rotation automatically when steering with A/D (no buttons held).
+  - Performance: Zero-allocation update loops implemented via pre-cached vectors to eliminate Garbage Collection frame-stutters.
+- **Character Controller**:
+  - Smooth character catch-up interpolation when steering via the camera.
+  - Rotate character to face the camera direction while holding the right mouse button.
+  - Strafe movement with A and D while holding the right mouse button.
+- **General Input**:
+  - Cursor hiding implemented for both left and right mouse button holds.
+  - Disabled default browser context menu for better camera control experience.
+- **Free Flight Camera**:
+  - Simplified controls to allow camera rotation ("Look Around") with both Left and Right mouse buttons.
+
+---
+
 ## [0.2.0] - 2026-01-13
 
 ### 🚀 Core Engine

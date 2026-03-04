@@ -51,18 +51,26 @@ export class Character
         const right = vec3.fromValues(Math.cos(rad), 0, -Math.sin(rad));
 
         const velocity = vec3.create();
+        const rightClickHeld = (input.getMouseButtons() & 2) !== 0;
 
         if (input.isKeyPressed('w')) vec3.add(velocity, velocity, forward);
         if (input.isKeyPressed('s')) vec3.sub(velocity, velocity, forward);
-        if (input.isKeyPressed('q')) vec3.sub(velocity, velocity, right); // Strafe Left (relative to character)
-        if (input.isKeyPressed('e')) vec3.add(velocity, velocity, right); // Strafe Right (relative to character)
+
+        const moveLeft = input.isKeyPressed('q') || (rightClickHeld && input.isKeyPressed('a'));
+        const moveRight = input.isKeyPressed('e') || (rightClickHeld && input.isKeyPressed('d'));
+
+        if (moveLeft) vec3.sub(velocity, velocity, right); // Strafe Left (relative to character)
+        if (moveRight) vec3.add(velocity, velocity, right); // Strafe Right (relative to character)
 
         // Rotation
         const dt = deltaTime * 0.001;
 
         // Standard: +Rotation is CCW (Left). -Rotation is CW (Right).
-        if (input.isKeyPressed('a')) this.rotation += this._rotationSpeed * dt; // A -> Left (CCW) -> +Rotation
-        if (input.isKeyPressed('d')) this.rotation -= this._rotationSpeed * dt; // D -> Right (CW) -> -Rotation
+        if (!rightClickHeld)
+        {
+            if (input.isKeyPressed('a')) this.rotation += this._rotationSpeed * dt; // A -> Left (CCW) -> +Rotation
+            if (input.isKeyPressed('d')) this.rotation -= this._rotationSpeed * dt; // D -> Right (CW) -> -Rotation
+        }
 
         if (vec3.length(velocity) > 0)
         {

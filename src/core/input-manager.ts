@@ -16,8 +16,18 @@ export class InputManager
         window.addEventListener('keydown', (e) => this._keysPressed.add(e.key.toLowerCase()));
         window.addEventListener('keyup', (e) => this._keysPressed.delete(e.key.toLowerCase()));
 
-        window.addEventListener('mousedown', (e) => { this._mouseButtons = e.buttons; });
-        window.addEventListener('mouseup', (e) => { this._mouseButtons = e.buttons; });
+        window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        window.addEventListener('mousedown', (e) => {
+            this._mouseButtons = e.buttons;
+
+            if (e.buttons !== 0) document.body.style.cursor = 'none';
+        });
+        window.addEventListener('mouseup', (e) => {
+            this._mouseButtons = e.buttons;
+
+            if (e.buttons === 0) document.body.style.cursor = '';
+        });
 
         window.addEventListener('mousemove', (e) => {
             // Accumulate movement
