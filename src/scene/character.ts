@@ -15,7 +15,10 @@ export class Character
      */
     public rotation = 0;
 
-    private _speed = 3; // Character speed in m/s
+    /**
+     * Character speed in m/s
+     */
+    private _speed = 3;
     /**
      * Rotation speed in degrees per second
      */
@@ -26,8 +29,10 @@ export class Character
         this.mesh = mesh;
     }
 
-    public update(deltaTime: number, input: InputManager): void
+    public update(deltaTime: number, input: InputManager, ignoreInput = false): void
     {
+        if (ignoreInput) return;
+
         // Movement
         const rad = this.rotation * DEG_TO_RAD;
 
@@ -51,7 +56,9 @@ export class Character
         const right = vec3.fromValues(Math.cos(rad), 0, -Math.sin(rad));
 
         const velocity = vec3.create();
-        const rightClickHeld = (input.getMouseButtons() & 2) !== 0;
+
+        const buttons = input.getMouseButtons();
+        const rightClickHeld = (buttons & 2) !== 0;
 
         if (input.isKeyPressed('w')) vec3.add(velocity, velocity, forward);
         if (input.isKeyPressed('s')) vec3.sub(velocity, velocity, forward);
@@ -66,7 +73,7 @@ export class Character
         const dt = deltaTime * 0.001;
 
         // Standard: +Rotation is CCW (Left). -Rotation is CW (Right).
-        if (!rightClickHeld)
+        if (rightClickHeld)
         {
             if (input.isKeyPressed('a')) this.rotation += this._rotationSpeed * dt; // A -> Left (CCW) -> +Rotation
             if (input.isKeyPressed('d')) this.rotation -= this._rotationSpeed * dt; // D -> Right (CW) -> -Rotation

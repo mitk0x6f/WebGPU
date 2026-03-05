@@ -46,9 +46,9 @@ export class BaseCamera
     /**
      * Field of view (FOV) in degrees
      */
-    protected readonly _fovY: number;
-    protected readonly _near: number;
-    protected readonly _far: number;
+    protected _fovY: number;
+    protected _near: number;
+    protected _far: number;
 
     protected _cameraBuffer!: GPUBuffer;
 
@@ -109,6 +109,15 @@ export class BaseCamera
         this.updateVectors();
         this.updateMatrices();
     }
+
+    public get fov(): number { return this._fovY; }
+    public set fov(v: number) { this._fovY = v; this.updateMatrices(); }
+
+    public get near(): number { return this._near; }
+    public set near(v: number) { this._near = v; this.updateMatrices(); }
+
+    public get far(): number { return this._far; }
+    public set far(v: number) { this._far = v; this.updateMatrices(); }
 
     public get position(): vec3 { return this._position; }
     public set position(v: vec3) { vec3.copy(this._position, v); }

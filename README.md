@@ -1,4 +1,4 @@
-![Version](https://img.shields.io/badge/Version-0.2.1-blue)
+![Version](https://img.shields.io/badge/Version-0.2.3-blue)
 ![WIP](https://img.shields.io/badge/Work_In_Progress-yellow)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
@@ -22,9 +22,9 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
 - **Atmospheric Effects**: Dense fog and cloud systems for a creepy, immersive environment
 - **Character Controller** (In Development):
   - Third-person character movement with `WASD` + `QE` + `mouse` controls
-  - Advanced camera-independent steering and right-click rotation (rotate character while mouse dragging)
-  - Character model smoothly catches up to camera heading when right-click is held
-  - Strafe movement with `A` and `D` while holding right mouse button
+  - Advanced camera-independent steering and `Right Mouse Button` rotation (rotate character while mouse dragging)
+  - Character model smoothly catches up to camera heading when `Right Mouse Button` is held
+  - Strafe movement with `A` and `D` while holding `Right Mouse Button`
   - State machine (idle, walk)
   - Smooth acceleration / deceleration curves
   - Ground detection and slope handling
@@ -34,11 +34,41 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
   - Dual camera modes with seamless switching
   - First-person free-flight camera for exploration
   - Third-person camera with fully decoupled absolute orbit architecture and spring arm system
+  - Spring Arm system for dynamic distance control with smooth zoom
+  - Dynamic camera position switching (Left Shoulder, Center, Right Shoulder via `1`, `2`, `3` keys) with ease-out quart transitions
   - Zero-allocation update loops (cached vectors) for ultra-responsive stutter-free performance
   - Camera smoothing (position and rotation lerp/slerp) with intelligent momentum stops
   - Collision detection (prevents clipping through geometry)
   - Look-at smoothing and FOV transitions
   - Camera shake support
+- **Pointer Lock Integration**: Seamless 360-degree rotation with automatic cursor restoration
+- **Debug UI System**:
+  - Abstraction layer (`IDebugUI`) for backend-agnostic implementation
+  - Tweakpane backend for modern, polished developer tools
+  - Tabbed interface with draggable, floating window functionality (Toggle with `F1` key)
+  - Real-time performance monitoring: FPS and Frame Time with historical line graphs
+  - Deep parameter binding with reactive state (e.g., conditional disabling of controls)
+  - Zero-allocation data binding via proxy adapters
+  - Interaction-aware input muting (hover vs. active UI engagement)
+
+---
+
+## Debug UI System
+
+The project features a highly modular debug system designed to be easily swappable.
+
+### Backend Abstraction
+
+- **IDebugUI**: The core interface that decouples domain panels from UI libraries.
+- **TweakpaneUI**: The current concrete implementation using [Tweakpane](https://tweakpane.github.io/docs/).
+- **Panels**: `StatsPanel` and `CameraPanel` are built against the abstraction, ensuring zero friction when moving to a custom UI.
+
+### Future Displacement
+
+The Tweakpane implementation is considered temporary (marked with `! TEMPORARY UI IMPLEMENTATION` in `main.ts`). To replace it:
+
+1. Implement a new class satisfying the `IDebugUI` interface (e.g., `CustomWebGPUI`).
+2. Swap the instantiation in `main.ts`.
 
 ---
 
@@ -57,7 +87,7 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
     npm create vite@latest m0x6f-webgpu-vite -- --template vanilla-ts
     ```
 
-2. **Navigate into the project director**
+2. **Navigate into the project directory**
 
     ```bash
     cd m0x6f-webgpu-vite
@@ -90,7 +120,7 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
 ### TODO
 
 - [ ] Enhance scene visuals
-  - [X] Add darker / creepier water appearance
+  - [x] Add darker / creepier water appearance
   - [ ] Add dense fog
   - [ ] Add dense clouds
 - [x] Implement character controller
@@ -106,12 +136,17 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
   - [x] Third-person camera controller
   - [x] Camera mode switching `Tab`
   - [x] Position/rotation smoothing (lerp/slerp)
-  - [ ] Spring arm system for dynamic distance
+  - [x] Spring arm system for dynamic distance
   - [ ] Camera collision detection
   - [ ] Look-at smoothing
   - [ ] FOV transitions
   - [ ] Camera shake system
 - [ ] Optimize performance
+- [x] Implement modular debug UI system
+  - [x] Backend-agnostic abstraction layer
+  - [x] Tweakpane integration
+  - [x] Draggable/Tabbed interface with performance graphs
+  - [ ] Replace with a custom WebGPU-rendered UI system
 - [ ] Add LICENSE.md
 
 ### COMPLETED
@@ -120,8 +155,8 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
 - [x] Update README.md
 - [x] Create CHANGELOG.md
 - [x] GitHub repository setup
-- - [x] Initialize git repository
-- - [x] Create initial commit
+  - [x] Initialize git repository
+  - [x] Create initial commit
 
 ---
 

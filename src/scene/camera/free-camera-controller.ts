@@ -16,8 +16,10 @@ export class FreeCameraController
         this._camera = camera;
     }
 
-    public update(deltaTime: number, input: InputManager): void
+    public update(deltaTime: number, input: InputManager, ignoreInput = false): void
     {
+        if (ignoreInput) return;
+
         const velocity = this._speed * deltaTime * 0.001;
 
         const pos = this._camera.position;
@@ -42,7 +44,7 @@ export class FreeCameraController
         if (input.isKeyPressed('e')) vec3.scaleAndAdd(pos, pos, up, velocity);
 
         // Mouse rotation
-        const buttons = input.getMouseButtons();
+        const buttons = ignoreInput ? 0 : input.getMouseButtons();
 
         if ((buttons & 1) || (buttons & 2))
         {

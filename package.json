@@ -11,7 +11,8 @@
     "@types/three": "^0.181.0",
     "fflate": "^0.8.2",
     "gl-matrix": "^3.4.3",
-    "three": "^0.181.2"
+    "three": "^0.181.2",
+    "tweakpane": "^4.0.5"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.64",
