@@ -16,6 +16,10 @@ export class RenderPassManager
     private frameBindGroup!: GPUBindGroup;
     private reflectionTextureView!: GPUTextureView;
 
+    // Cached objects for reflection rendering to avoid per-frame allocations
+    private readonly _originalPos = vec3.create();
+    private readonly _reflectedPos = vec3.create();
+
     get reflectionView(): GPUTextureView
     {
         return this.reflectionTextureView;
@@ -84,7 +88,7 @@ export class RenderPassManager
     ): void
     {
         // 1. Save camera state
-        const originalPos = vec3.clone(camera.position);
+        vec3.copy(this._originalPos, camera.position);
         const originalPitch = camera.pitch;
         const originalYaw = camera.yaw;
 
@@ -95,10 +99,11 @@ export class RenderPassManager
 
         // 3. Mirror camera across water plane
         // For a plane at height h: reflected_y = 2*h - original_y
-        const distanceAbovePlane = originalPos[1] - waterPlaneY;
+        const distanceAbovePlane = this._originalPos[1] - waterPlaneY;
         const mirroredY = waterPlaneY - distanceAbovePlane;
 
-        camera.position = vec3.fromValues(originalPos[0], mirroredY, originalPos[2]);
+        vec3.set(this._reflectedPos, this._originalPos[0], mirroredY, this._originalPos[2]);
+        camera.position = this._reflectedPos;
         camera.pitch = -originalPitch;
 
         camera.updateMatrices();
@@ -194,7 +199,7 @@ export class RenderPassManager
         device.queue.submit([encoderMeshes.finish()]);
 
         // 4. Restore camera state
-        camera.position = originalPos;
+        camera.position = this._originalPos;
         camera.pitch = originalPitch;
         camera.yaw = originalYaw;
         camera.updateMatrices();
@@ -202,7 +207,7 @@ export class RenderPassManager
         // Restore skybox position to original camera position
         if (scene.skybox)
         {
-            scene.skybox.position.set(originalPos);
+            scene.skybox.position.set(this._originalPos);
             scene.skybox.updateModelMatrix(device);
         }
     }

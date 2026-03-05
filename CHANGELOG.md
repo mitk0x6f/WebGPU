@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.2.4] - 2026-03-05
+
+### 🚀 Core Engine
+
+- **Project-wide Memory Optimization**:
+  - Eliminated per-frame memory allocations in the main update loop to prevent Garbage Collection (GC) pressure and micro-stutters
+  - Refactored `Character` controller to use pre-allocated scratch vectors for movement and velocity calculations
+  - Optimized `BaseCamera` oblique clipping logic to reuse internal matrix and vector objects
+  - Refactored `RenderPassManager` reflection pass to avoid cloning camera state objects during the mirrored pass
+  - Achieved a stable heap profile during continuous gameplay
+
+### 🧪 Debug & Tooling
+
+- **Controls Reference Panel**:
+  - Implemented a dedicated "Controls" tab in the debug UI
+    - Provides a list of keybindings
+    - Organized by category: Camera, Third-Person Mode, and Free-Flight Mode
+    - High-readability layout with granular key-to-action mapping
+
+---
+
 ## [0.2.3] - 2026-03-05
 
 ### 🎮 Input & Camera
@@ -258,7 +279,7 @@ All notable changes to this project will be documented in this file.
 ## Legend
 
 Emoji | Category | Description
-:---:|:---|:---
+:---: | :--- | :---
 `🚀` | `Core Engine` | Core systems: initialization, render loop, time, configuration.
 `🎮` | `Input & Camera` | Input handling (keyboard, mouse, controller) and camera systems.
 `🧱` | `ECS & Game Logic` | Entity-component-system, gameplay logic, AI behaviors, rules.

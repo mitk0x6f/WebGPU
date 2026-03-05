@@ -61,6 +61,13 @@ export class BaseCamera
     protected readonly _fallbackResources: FallbackResources;
     protected _currentReflectionTextureView: GPUTextureView;
 
+    // Cached objects to avoid per-frame allocations during matrix updates
+    private readonly _clipPlaneCamera = vec4.create();
+    private readonly _invView = mat4.create();
+    private readonly _invTransView = mat4.create();
+    private readonly _q = vec4.create();
+    private readonly _c = vec4.create();
+
     constructor(
         canvas: HTMLCanvasElement,
         device: GPUDevice,
@@ -207,27 +214,21 @@ export class BaseCamera
 
         if (this._clipPlane)
         {
-            const clipPlaneCamera = vec4.create();
-            const invView = mat4.create();
-            const invTransView = mat4.create();
-            const q = vec4.create();
-            const c = vec4.create();
+            mat4.invert(this._invView, this._viewMatrix);
+            mat4.transpose(this._invTransView, this._invView);
+            vec4.transformMat4(this._clipPlaneCamera, this._clipPlane, this._invTransView);
 
-            mat4.invert(invView, this._viewMatrix);
-            mat4.transpose(invTransView, invView);
-            vec4.transformMat4(clipPlaneCamera, this._clipPlane, invTransView);
+            this._q[0] = (Math.sign(this._clipPlaneCamera[0]) + this._projMatrix[8]) / this._projMatrix[0];
+            this._q[1] = (Math.sign(this._clipPlaneCamera[1]) + this._projMatrix[9]) / this._projMatrix[5];
+            this._q[2] = -1.0;
+            this._q[3] = (1.0 + this._projMatrix[10]) / this._projMatrix[14];
 
-            q[0] = (Math.sign(clipPlaneCamera[0]) + this._projMatrix[8]) / this._projMatrix[0];
-            q[1] = (Math.sign(clipPlaneCamera[1]) + this._projMatrix[9]) / this._projMatrix[5];
-            q[2] = -1.0;
-            q[3] = (1.0 + this._projMatrix[10]) / this._projMatrix[14];
+            vec4.scale(this._c, this._clipPlaneCamera, 2.0 / vec4.dot(this._clipPlaneCamera, this._q));
 
-            vec4.scale(c, clipPlaneCamera, 2.0 / vec4.dot(clipPlaneCamera, q));
-
-            this._projMatrix[2] = c[0];
-            this._projMatrix[6] = c[1];
-            this._projMatrix[10] = c[2] + 1.0;
-            this._projMatrix[14] = c[3];
+            this._projMatrix[2] = this._c[0];
+            this._projMatrix[6] = this._c[1];
+            this._projMatrix[10] = this._c[2] + 1.0;
+            this._projMatrix[14] = this._c[3];
         }
 
         mat4.multiply(this._viewProjMatrix, this._projMatrix, this._viewMatrix);

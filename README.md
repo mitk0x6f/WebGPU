@@ -1,4 +1,4 @@
-![Version](https://img.shields.io/badge/Version-0.2.3-blue)
+![Version](https://img.shields.io/badge/Version-0.2.4-blue)
 ![WIP](https://img.shields.io/badge/Work_In_Progress-yellow)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
@@ -61,7 +61,7 @@ The project features a highly modular debug system designed to be easily swappab
 
 - **IDebugUI**: The core interface that decouples domain panels from UI libraries.
 - **TweakpaneUI**: The current concrete implementation using [Tweakpane](https://tweakpane.github.io/docs/).
-- **Panels**: `StatsPanel` and `CameraPanel` are built against the abstraction, ensuring zero friction when moving to a custom UI.
+- **Panels**: `StatsPanel`, `ControlsPanel`, and `CameraPanel` are built against the abstraction, ensuring zero friction when moving to a custom UI.
 
 ### Future Displacement
 

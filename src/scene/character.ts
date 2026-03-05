@@ -24,6 +24,11 @@ export class Character
      */
     private _rotationSpeed = 120;
 
+    // Cached vectors to avoid per-frame allocations (prevents GC stutters)
+    private readonly _forward = vec3.create();
+    private readonly _right = vec3.create();
+    private readonly _velocity = vec3.create();
+
     constructor(mesh: Mesh)
     {
         this.mesh = mesh;
@@ -46,28 +51,28 @@ export class Character
         // 90 -> (-1, 0, 0)
         // x = -sin(rad)
         // z = -cos(rad)
-        const forward = vec3.fromValues(-Math.sin(rad), 0, -Math.cos(rad));
+        vec3.set(this._forward, -Math.sin(rad), 0, -Math.cos(rad));
 
         // Right:
         // 0 -> (1, 0, 0)
         // 90 -> (0, 0, -1)
         // x = cos(rad)
         // z = -sin(rad)
-        const right = vec3.fromValues(Math.cos(rad), 0, -Math.sin(rad));
+        vec3.set(this._right, Math.cos(rad), 0, -Math.sin(rad));
 
-        const velocity = vec3.create();
+        vec3.zero(this._velocity);
 
         const buttons = input.getMouseButtons();
         const rightClickHeld = (buttons & 2) !== 0;
 
-        if (input.isKeyPressed('w')) vec3.add(velocity, velocity, forward);
-        if (input.isKeyPressed('s')) vec3.sub(velocity, velocity, forward);
+        if (input.isKeyPressed('w')) vec3.add(this._velocity, this._velocity, this._forward);
+        if (input.isKeyPressed('s')) vec3.sub(this._velocity, this._velocity, this._forward);
 
         const moveLeft = input.isKeyPressed('q') || (rightClickHeld && input.isKeyPressed('a'));
         const moveRight = input.isKeyPressed('e') || (rightClickHeld && input.isKeyPressed('d'));
 
-        if (moveLeft) vec3.sub(velocity, velocity, right); // Strafe Left (relative to character)
-        if (moveRight) vec3.add(velocity, velocity, right); // Strafe Right (relative to character)
+        if (moveLeft) vec3.sub(this._velocity, this._velocity, this._right); // Strafe Left (relative to character)
+        if (moveRight) vec3.add(this._velocity, this._velocity, this._right); // Strafe Right (relative to character)
 
         // Rotation
         const dt = deltaTime * 0.001;
@@ -79,11 +84,11 @@ export class Character
             if (input.isKeyPressed('d')) this.rotation -= this._rotationSpeed * dt; // D -> Right (CW) -> -Rotation
         }
 
-        if (vec3.length(velocity) > 0)
+        if (vec3.length(this._velocity) > 0)
         {
-            vec3.normalize(velocity, velocity);
-            vec3.scale(velocity, velocity, this._speed * dt);
-            vec3.add(this.position, this.position, velocity);
+            vec3.normalize(this._velocity, this._velocity);
+            vec3.scale(this._velocity, this._velocity, this._speed * dt);
+            vec3.add(this.position, this.position, this._velocity);
         }
 
         // Update mesh

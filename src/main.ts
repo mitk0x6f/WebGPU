@@ -1,3 +1,5 @@
+// main.ts
+
 import { InputManager } from "./core/input-manager";
 import { Renderer } from "./rendering/renderer";
 import { BaseCamera } from "./scene/camera/base-camera";
@@ -5,7 +7,8 @@ import { FreeCameraController } from "./scene/camera/free-camera-controller";
 import { ThirdPersonCameraController } from "./scene/camera/third-person-camera-controller";
 import { initializeScene, updateScene } from "./scene/bootstrap";
 // ! TEMPORARY UI IMPLEMENTATION [START]
-import { TweakpaneUI, createCameraDebugPanel, createStatsDebugPanel } from "./debug";
+import { TweakpaneUI, createCameraDebugPanel, createStatsDebugPanel, createControlsDebugPanel } from "./debug";
+
 // ! TEMPORARY UI IMPLEMENTATION [END]
 
 async function main()
@@ -35,12 +38,15 @@ async function main()
         const tabs = debugUI.addTabs({
             pages: [
                 { title: "Stats" },
+                { title: "Controls" },
                 { title: "Camera" }
             ]
         });
 
         statsDebug = createStatsDebugPanel(tabs.pages[0]);
-        createCameraDebugPanel(tabs.pages[1], camera, tpcController);
+        createControlsDebugPanel(tabs.pages[1]);
+        createCameraDebugPanel(tabs.pages[2], camera, tpcController);
+
     } catch (e) {
         console.error("Failed to initialize Debug UI:", e);
     }
