@@ -3,7 +3,10 @@
 import { vec3 } from 'gl-matrix';
 
 import { InputManager } from '../../core/input-manager';
+import { InputAction } from '../../core/input-action';
+import { InputMapper } from '../../core/input-mapper';
 import { DEG_TO_RAD, RAD_TO_DEG } from '../../core/math-constants';
+import { lerpAngle } from '../../core/math-utils';
 import { Character } from '../character';
 import { BaseCamera } from './base-camera';
 
@@ -11,30 +14,39 @@ export class ThirdPersonCameraController
 {
     private _camera: BaseCamera;
     private _target: Character;
+    private _inputMapper: InputMapper;
+
+    private readonly _defaultValues = {
+        height: 1.8,
+        pitch: -10,
+        shoulderOffset: 0.8,
+        shoulderSide: 1.0,
+        distance: 2.5
+    };
 
     // * Camera Configuration
     // Vertical offset from the character's pivot (feet).
     // 1.4 = Shoulder level. 0.5 = Waist level.
-    private _height = 1.8;
+    private _height = this._defaultValues.height;
     // Initial vertical angle in degrees.
     // Negative = Looking down. Positive = Looking up.
-    private _pitch = -10;
+    private _pitch = this._defaultValues.pitch;
     // Base horizontal offset distance for over-the-shoulder look.
-    private _shoulderOffset = 0.8;
+    private _shoulderOffset = this._defaultValues.shoulderOffset;
     // Which side the camera is on: -1 (Left), 0 (Center), 1 (Right).
-    private _targetShoulderSide = 1.0;
+    private _targetShoulderSide = this._defaultValues.shoulderSide;
     // The shoulder side value at the start of the current ease-out quart transition.
-    private _shoulderTransitionFrom = 1.0;
+    private _shoulderTransitionFrom = this._defaultValues.shoulderSide;
     // Normalized progress (0 → 1) of the shoulder side transition.
     private _shoulderTransitionProgress = 1.0;
     // Duration in seconds for the shoulder side ease-out quart transition.
     private _shoulderEaseDuration = 0.4;
     // Distance from the camera to the target pivot point.
     // Controls how far back the camera is.
-    private _currentDistance = 2.5;
+    private _currentDistance = this._defaultValues.distance;
 
     // * Spring Arm Configuration
-    private _targetDistance = 2.5; // Starts at current
+    private _targetDistance = this._defaultValues.distance; // Starts at current
     private _minDistance = 1.0;
     private _maxDistance = 10.0;
     private _zoomSpeed = 0.1; // How much distance changes per scroll tick
@@ -60,6 +72,15 @@ export class ThirdPersonCameraController
     public get maxDistance(): number { return this._maxDistance; }
     public set maxDistance(v: number) { this._maxDistance = v; }
 
+    public resetToDefaults(): void
+    {
+        this.height = this._defaultValues.height;
+        this._targetOrbitPitch = this._defaultValues.pitch;
+        this.shoulderOffset = this._defaultValues.shoulderOffset;
+        this.setShoulderSide(this._defaultValues.shoulderSide);
+        this.distance = this._defaultValues.distance;
+    }
+
     /**
      * Internal method to trigger the move-transition when the shoulder side changes via code or UI.
      */
@@ -82,14 +103,14 @@ export class ThirdPersonCameraController
 
     // Target orbit values (where input intends to go)
     private _targetOrbitYaw = 0;
-    private _targetOrbitPitch = -10;
+    private _targetOrbitPitch = this._defaultValues.pitch;
 
     // Current smoothed orbit values (where the camera actually is)
     private _currentOrbitYaw = 0;
-    private _currentOrbitPitch = -10;
+    private _currentOrbitPitch = this._defaultValues.pitch;
 
-    // Tracks previous buttons state to detect when a mouse button is released
-    private _previousButtons = 0;
+    // Tracks previous state to detect when a look-rotate action is released
+    private _previousLookRotateActive = false;
 
     // Target for character smoothly aligning to camera
     private _characterTargetYaw: number | null = null;
@@ -99,10 +120,11 @@ export class ThirdPersonCameraController
     private readonly _tempTargetPivot = vec3.create();
     private readonly _tempFront = vec3.create();
 
-    constructor(camera: BaseCamera, target: Character)
+    constructor(camera: BaseCamera, target: Character, inputMapper: InputMapper)
     {
         this._camera = camera;
         this._target = target;
+        this._inputMapper = inputMapper;
 
         // Initialize to character's starting rotation so we start behind them
         this._targetOrbitYaw = this._target.rotation;
@@ -115,92 +137,99 @@ export class ThirdPersonCameraController
 
     public update(deltaTime: number, input: InputManager, ignoreInput = false): void
     {
-        if (ignoreInput) return;
+        const looking = input.isActionPressed(InputAction.Look);
+        const lookRotating = input.isActionPressed(InputAction.LookRotate);
+        const anyLooking = looking || lookRotating;
 
-        const buttons = input.getMouseButtons();
+        // Check if look-rotate action was just released
+        const lookRotateActive = lookRotating;
+        const lookRotateJustReleased = this._previousLookRotateActive && !lookRotateActive;
 
-        // Check if right click was just released
-        const rightClickReleased = (this._previousButtons & 2) !== 0 && (buttons & 2) === 0;
-
-        // If right drag just ended, immediately snap the target to the current position
-        // to stop any residual smooth momentum on the camera.
-        if (rightClickReleased)
+        if (!ignoreInput)
         {
-            this._targetOrbitYaw = this._currentOrbitYaw;
-            this._targetOrbitPitch = this._currentOrbitPitch;
-        }
+            // Mouse rotation
+            if (anyLooking)
+            {
+                const delta = input.consumeMouseDelta();
 
-        // Mouse rotation
-        if ((buttons & 1) || (buttons & 2))
-        {
-            const delta = input.consumeMouseDelta();
+                // Both look and look-rotating change pitch (up/down)
+                this._targetOrbitPitch -= delta.y * 0.3; // Mouse Up -> Pitch Decrease -> Camera Down -> Look Up
+                this._targetOrbitPitch = Math.max(-89, Math.min(89, this._targetOrbitPitch));
 
-            // Both left and right click change pitch (up/down)
-            this._targetOrbitPitch -= delta.y * 0.3; // Mouse Up -> Pitch Decrease -> Camera Down -> Look Up
-            this._targetOrbitPitch = Math.max(-89, Math.min(89, this._targetOrbitPitch));
+                // Orbit Yaw (Left/Right)
+                this._targetOrbitYaw -= delta.x * 0.3;
 
-            // Orbit Yaw (Left/Right)
-            this._targetOrbitYaw -= delta.x * 0.3;
+                // If look-rotating, track the camera orientation
+                if (lookRotating) this._characterTargetYaw = this._targetOrbitYaw;
+            }
+            else
+            {
+                // Even if ignored or no buttons, we must consume delta to prevent jumps later
+                input.consumeMouseDelta();
 
-            // If right-clicking, track the camera orientation
-            if (buttons & 2) this._characterTargetYaw = this._targetOrbitYaw;
+                // Keyboard rotation (A/D) when no looking is active
+                const dt = deltaTime * 0.001;
+
+                // If using A/D, sync the character orientation to the new orbit yaw
+                if (input.isActionPressed(InputAction.TurnLeft) || input.isActionPressed(InputAction.TurnRight))
+                {
+                    if (input.isActionPressed(InputAction.TurnLeft)) this._targetOrbitYaw += 120 * dt;
+                    if (input.isActionPressed(InputAction.TurnRight)) this._targetOrbitYaw -= 120 * dt;
+
+                    this._characterTargetYaw = this._targetOrbitYaw;
+                }
+            }
+
+            // Mouse Scroll / Zoom (Spring Arm Target Distance)
+            const scrollDelta = input.consumeScrollDelta();
+
+            if (scrollDelta !== 0)
+            {
+                this._targetDistance += scrollDelta * this._zoomSpeed;
+                // Clamp target distance
+                this._targetDistance = Math.max(this._minDistance, Math.min(this._maxDistance, this._targetDistance));
+            }
+
+            // Camera Shoulder Settings (Left / Center / Right)
+            let newShoulderSide: number | null = null;
+            if (input.isActionJustPressed(InputAction.CameraShoulderLeft)) newShoulderSide = -1.0;
+            if (input.isActionJustPressed(InputAction.CameraCenter)) newShoulderSide = 0.0;
+            if (input.isActionJustPressed(InputAction.CameraShoulderRight)) newShoulderSide = 1.0;
+
+            if (input.isActionJustPressed(InputAction.CameraShoulderToggle))
+            {
+                const pref = this._inputMapper.getGameplaySettings().shoulderToggleFirstSide;
+                const firstSide = pref === 'Left' ? -1.0 : 1.0;
+
+                if (this._targetShoulderSide === 1.0) newShoulderSide = -1.0;
+                else if (this._targetShoulderSide === -1.0) newShoulderSide = 1.0;
+                else newShoulderSide = firstSide;
+            }
+
+            if (newShoulderSide !== null && newShoulderSide !== this._targetShoulderSide)
+            {
+                // Derive the current eased value on-the-fly and use it as the new start point.
+                // This allows seamless mid-transition direction changes.
+                this._shoulderTransitionFrom = this.lerp(
+                    this._shoulderTransitionFrom, this._targetShoulderSide,
+                    this.easeOutQuart(this._shoulderTransitionProgress)
+                );
+                this._shoulderTransitionProgress = 0;
+                this._targetShoulderSide = newShoulderSide;
+            }
         }
         else
         {
-            // Even if ignored or no buttons, we must consume delta to prevent jumps later
+            // If ignoreInput is true, we MUST consume the deltas so they don't accumulate and cause a snap
             input.consumeMouseDelta();
-
-            // Keyboard rotation (A/D) when no mouse buttons are pressed
-            // Matches character's hardcoded rotation speed (120 deg/s)
-            const dt = deltaTime * 0.001;
-
-            // If using A/D, sync the character orientation to the new orbit yaw
-            if (input.isKeyPressed('a') || input.isKeyPressed('d'))
-            {
-                if (input.isKeyPressed('a')) this._targetOrbitYaw += 120 * dt;
-                if (input.isKeyPressed('d')) this._targetOrbitYaw -= 120 * dt;
-
-                this._characterTargetYaw = this._targetOrbitYaw;
-            }
-        }
-
-        // Mouse Scroll / Zoom (Spring Arm Target Distance)
-        const scrollDelta = input.consumeScrollDelta();
-
-        if (scrollDelta !== 0)
-        {
-            this._targetDistance += scrollDelta * this._zoomSpeed;
-            // Clamp target distance
-            this._targetDistance = Math.max(this._minDistance, Math.min(this._maxDistance, this._targetDistance));
-        }
-
-        // Camera Shoulder Settings (Left / Center / Right)
-        // When the target side changes, start a new ease-out quart transition
-        // from the current (possibly mid-transition) shoulder side value.
-        // 1: Left, 2: Center, 3: Right
-        let newShoulderSide: number | null = null;
-
-        if (input.isKeyPressed('1')) newShoulderSide = -1.0;
-        if (input.isKeyPressed('2')) newShoulderSide = 0.0;
-        if (input.isKeyPressed('3')) newShoulderSide = 1.0;
-
-        if (newShoulderSide !== null && newShoulderSide !== this._targetShoulderSide)
-        {
-            // Derive the current eased value on-the-fly and use it as the new start point.
-            // This allows seamless mid-transition direction changes.
-            this._shoulderTransitionFrom = this.lerp(
-                this._shoulderTransitionFrom, this._targetShoulderSide,
-                this.easeOutQuart(this._shoulderTransitionProgress)
-            );
-            this._shoulderTransitionProgress = 0;
-            this._targetShoulderSide = newShoulderSide;
+            input.consumeScrollDelta();
         }
 
         // Smoothly rotate the character model to catch up
         if (this._characterTargetYaw !== null)
         {
             const charT = 1.0 - Math.pow(0.001, deltaTime * 0.001 * 12.0); // Fast but smooth catch-up speed
-            this._target.rotation = this.lerpAngle(this._target.rotation, this._characterTargetYaw, charT);
+            this._target.rotation = lerpAngle(this._target.rotation, this._characterTargetYaw, charT);
 
             // Stop tracking if we're super close
             let charDiff = (this._characterTargetYaw - this._target.rotation) % 360;
@@ -210,12 +239,18 @@ export class ThirdPersonCameraController
             if (Math.abs(charDiff) < 0.1) this._characterTargetYaw = null;
         }
 
-        this._previousButtons = buttons;
+        if (lookRotateJustReleased)
+        {
+            this._targetOrbitYaw = this._currentOrbitYaw;
+            this._targetOrbitPitch = this._currentOrbitPitch;
+        }
+
+        this._previousLookRotateActive = lookRotateActive;
 
         // Time-corrected lerp factor for smooth rotation frame-rate independence
         const t = 1.0 - Math.pow(0.001, deltaTime * 0.001 * this.SMOOTH_FACTOR);
 
-        this._currentOrbitYaw = this.lerpAngle(this._currentOrbitYaw, this._targetOrbitYaw, t);
+        this._currentOrbitYaw = lerpAngle(this._currentOrbitYaw, this._targetOrbitYaw, t);
         this._currentOrbitPitch = this.lerp(this._currentOrbitPitch, this._targetOrbitPitch, t);
 
         // Smoothly adjust current distance towards target (Spring Arm effect)
@@ -306,16 +341,6 @@ export class ThirdPersonCameraController
     private lerp(start: number, end: number, t: number): number
     {
         return start * (1 - t) + end * t;
-    }
-
-    private lerpAngle(start: number, end: number, t: number): number
-    {
-        let diff = (end - start) % 360;
-
-        if (diff < -180) diff += 360;
-        if (diff > 180) diff -= 360;
-
-        return start + diff * t;
     }
 
     /**

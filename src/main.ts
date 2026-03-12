@@ -1,20 +1,23 @@
 // main.ts
 
-import { InputManager } from "./core/input-manager";
-import { Renderer } from "./rendering/renderer";
-import { BaseCamera } from "./scene/camera/base-camera";
-import { FreeCameraController } from "./scene/camera/free-camera-controller";
-import { ThirdPersonCameraController } from "./scene/camera/third-person-camera-controller";
-import { initializeScene, updateScene } from "./scene/bootstrap";
+import { InputManager } from './core/input-manager';
+import { InputMapper } from './core/input-mapper';
+import { InputAction } from './core/input-action';
+import { Renderer } from './rendering/renderer';
+import { BaseCamera } from './scene/camera/base-camera';
+import { FreeCameraController } from './scene/camera/free-camera-controller';
+import { ThirdPersonCameraController } from './scene/camera/third-person-camera-controller';
+import { initializeScene, updateScene } from './scene/bootstrap';
 // ! TEMPORARY UI IMPLEMENTATION [START]
-import { TweakpaneUI, createCameraDebugPanel, createStatsDebugPanel, createControlsDebugPanel } from "./debug";
+import { TweakpaneUI, createCameraDebugPanel, createStatsDebugPanel, createSettingsDebugPanel } from './debug';
 
 // ! TEMPORARY UI IMPLEMENTATION [END]
 
 async function main()
 {
     const canvas = document.getElementById('gpu-canvas') as HTMLCanvasElement;
-    const inputManager = new InputManager();
+    const inputMapper = new InputMapper();
+    const inputManager = new InputManager(inputMapper);
 
     const renderer = new Renderer(canvas);
     await renderer.initialize();
@@ -24,7 +27,7 @@ async function main()
     const { scene, character } = await initializeScene(renderer, camera);
 
     const freeController = new FreeCameraController(camera);
-    const tpcController = new ThirdPersonCameraController(camera, character);
+    const tpcController = new ThirdPersonCameraController(camera, character, inputMapper);
 
     let activeController: FreeCameraController | ThirdPersonCameraController = tpcController;
 
@@ -33,46 +36,30 @@ async function main()
     let debugUI: TweakpaneUI | undefined;
     let statsDebug: { update: (deltaTime: number, frameCount: number) => void } | undefined;
 
-    try {
-        debugUI = new TweakpaneUI("github.com/mitk0x6f");
+    try
+    {
+        debugUI = new TweakpaneUI('github.com/mitk0x6f');
         const tabs = debugUI.addTabs({
             pages: [
-                { title: "Stats" },
-                { title: "Controls" },
-                { title: "Camera" }
+                { title: 'Stats' },
+                { title: 'Controls' },
+                { title: 'Camera' }
             ]
         });
 
         statsDebug = createStatsDebugPanel(tabs.pages[0]);
-        createControlsDebugPanel(tabs.pages[1]);
+        createSettingsDebugPanel(tabs.pages[1], inputMapper, inputManager);
         createCameraDebugPanel(tabs.pages[2], camera, tpcController);
 
-    } catch (e) {
-        console.error("Failed to initialize Debug UI:", e);
+    }
+    catch (e)
+    {
+        console.error('Failed to initialize Debug UI:', e);
     }
     // ! TEMPORARY UI IMPLEMENTATION [END]
 
     let lastTime = 0;
     let globalTime = 0;
-
-    // TODO: Move below event listener to input manager ?
-    window.addEventListener('keydown', (e) => {
-        if (e.key === 'Tab')
-        {
-            e.preventDefault();
-
-            activeController = (activeController === freeController) ? tpcController : freeController;
-        }
-
-        // ! TEMPORARY UI IMPLEMENTATION [START]
-        if (e.key === 'F1' && debugUI)
-        {
-            e.preventDefault();
-
-            debugUI.visible = !debugUI.visible;
-        }
-        // ! TEMPORARY UI IMPLEMENTATION [END]
-    });
 
     // ! TEMPORARY UI IMPLEMENTATION [START]
     window.addEventListener('mousedown', (e) => {
@@ -93,7 +80,21 @@ async function main()
         lastTime = timestamp;
         globalTime += deltaTime;
 
+        // Update action history (JustPressed logic) at the START of the frame
+        inputManager.update();
+
+        // Global Toggles (Single press)
+        if (inputManager.isActionJustPressed(InputAction.SwitchCamera))
+        {
+            activeController = (activeController === freeController) ? tpcController : freeController;
+        }
+
         // ! TEMPORARY UI IMPLEMENTATION [START]
+        if (inputManager.isActionJustPressed(InputAction.ToggleUI) && debugUI)
+        {
+            debugUI.visible = !debugUI.visible;
+        }
+
         // Only mute if actively interacting (dragging a slider) or typing.
         // Simple hover NO LONGER blocks the game.
         const isUIFocused = debugUI?.visible && (debugUI?.isTyping || debugUI?.isInteracting);

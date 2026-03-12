@@ -3,6 +3,7 @@
 import { vec3 } from 'gl-matrix';
 
 import { InputManager } from '../../core/input-manager';
+import { InputAction } from '../../core/input-action';
 import { BaseCamera } from './base-camera';
 
 export class FreeCameraController
@@ -36,17 +37,18 @@ export class FreeCameraController
          */
         const up = this._camera.up;
 
-        if (input.isKeyPressed('w')) vec3.scaleAndAdd(pos, pos, front, velocity);
-        if (input.isKeyPressed('s')) vec3.scaleAndAdd(pos, pos, front, -velocity);
-        if (input.isKeyPressed('a')) vec3.scaleAndAdd(pos, pos, right, -velocity);
-        if (input.isKeyPressed('d')) vec3.scaleAndAdd(pos, pos, right, velocity);
-        if (input.isKeyPressed('q')) vec3.scaleAndAdd(pos, pos, up, -velocity);
-        if (input.isKeyPressed('e')) vec3.scaleAndAdd(pos, pos, up, velocity);
+        if (input.isActionPressed(InputAction.MoveForward)) vec3.scaleAndAdd(pos, pos, front, velocity);
+        if (input.isActionPressed(InputAction.MoveBackward)) vec3.scaleAndAdd(pos, pos, front, -velocity);
+        if (input.isActionPressed(InputAction.TurnLeft)) vec3.scaleAndAdd(pos, pos, right, -velocity);
+        if (input.isActionPressed(InputAction.TurnRight)) vec3.scaleAndAdd(pos, pos, right, velocity);
+        if (input.isActionPressed(InputAction.MoveDown)) vec3.scaleAndAdd(pos, pos, up, -velocity);
+        if (input.isActionPressed(InputAction.MoveUp)) vec3.scaleAndAdd(pos, pos, up, velocity);
 
         // Mouse rotation
-        const buttons = ignoreInput ? 0 : input.getMouseButtons();
+        const looking = input.isActionPressed(InputAction.Look);
+        const lookRotating = input.isActionPressed(InputAction.LookRotate);
 
-        if ((buttons & 1) || (buttons & 2))
+        if (looking || lookRotating)
         {
             const delta = input.consumeMouseDelta();
             this._camera.yaw += delta.x * this._sensitivity;

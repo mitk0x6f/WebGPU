@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.2.5] - 2026-03-12
+
+### 🎮 Input & Camera
+
+- **Robust Input Mapping System**:
+  - Implemented `InputMapper` to handle complex multi-binding configurations (multiple keys per action)
+  - Added support for `Mouse Button` bindings and `RMB` modifiers for context-sensitive actions
+  - Fixed input spamming for global toggles (Switch Camera, Toggle UI) by moving logic into the synchronized simulation loop using edge-detection (`isActionJustPressed`)
+  - Persistent storage: Keybindings and gameplay settings automatically save and load from `localStorage`
+- **Spring Arm & Movement Refinement**:
+  - Finalized Spring Arm system with smooth, scale-aware scroll zooming
+- **Encapsulated Camera Defaults**:
+  - Refactored `BaseCamera` and `ThirdPersonCameraController` to use overridable default value dictionaries
+  - Ensures settings reset to the specific values provided at instantiation
+
+### 🧪 Debug & Tooling
+
+- **UI Polish & Accessibility**:
+  - Enhanced `Tweakpane` with `sticky` tab headers and scrollable content to prevent viewport overflow on tall menus (e.g., Keybindings)
+  - Implemented **Vertical-Only Resizing** to maintain clean layout while allowing flexible height management
+  - Standardized the "Reset to Defaults" pattern across all panels with a mandatory user confirmation dialog
+  - Synchronized naming conventions (`Folder` vs `Binding`) to ensure codebase consistency
+
+### 🚀 Core Engine
+
+- **Shared Math Utilities**:
+  - Extracted critical logic like `lerpAngle` to a dedicated `math-utils.ts` for project-wide reuse
+- **Character Cleanup**:
+  - Refactored mesh access (now `public readonly`) and eliminated redundant internal update caches
+- **Lifecycle Management**:
+  - Implemented `dispose()` pattern in `InputManager` to properly clean up global event listeners, enhancing modularity and reusability
+
+### 📖 Documentation
+
+- Updated `README.md` to accurately reflect the current feature set and development roadmap
+- Synchronized feature lists across documentation and codebase status
+
+---
+
 ## [0.2.4] - 2026-03-05
 
 ### 🚀 Core Engine

@@ -3,12 +3,14 @@
 import { vec3 } from 'gl-matrix';
 
 import { InputManager } from '../core/input-manager';
+import { InputAction } from '../core/input-action';
 import { DEG_TO_RAD } from '../core/math-constants';
 import { Mesh } from './renderables/mesh';
 
 export class Character
 {
-    public mesh: Mesh;
+    public readonly mesh: Mesh;
+
     public position = vec3.create();
     /**
      * Rotation in degrees
@@ -38,7 +40,9 @@ export class Character
     {
         if (ignoreInput) return;
 
-        // Movement
+        const dt = deltaTime * 0.001;
+
+        // Calculate local axes based on current rotation
         const rad = this.rotation * DEG_TO_RAD;
 
         // Standard WebGPU: Forward is -Z, Right is +X
@@ -47,55 +51,55 @@ export class Character
         // 90 deg (CCW) -> -X (Forward)
 
         // Forward:
-        // 0 -> (0, 0, -1)
-        // 90 -> (-1, 0, 0)
         // x = -sin(rad)
         // z = -cos(rad)
         vec3.set(this._forward, -Math.sin(rad), 0, -Math.cos(rad));
 
         // Right:
-        // 0 -> (1, 0, 0)
-        // 90 -> (0, 0, -1)
         // x = cos(rad)
         // z = -sin(rad)
         vec3.set(this._right, Math.cos(rad), 0, -Math.sin(rad));
 
         vec3.zero(this._velocity);
 
-        const buttons = input.getMouseButtons();
-        const rightClickHeld = (buttons & 2) !== 0;
+        if (input.isActionPressed(InputAction.MoveForward)) vec3.add(this._velocity, this._velocity, this._forward);
+        if (input.isActionPressed(InputAction.MoveBackward)) vec3.sub(this._velocity, this._velocity, this._forward);
+        if (input.isActionPressed(InputAction.StrafeLeft)) vec3.sub(this._velocity, this._velocity, this._right);
+        if (input.isActionPressed(InputAction.StrafeRight)) vec3.add(this._velocity, this._velocity, this._right);
 
-        if (input.isKeyPressed('w')) vec3.add(this._velocity, this._velocity, this._forward);
-        if (input.isKeyPressed('s')) vec3.sub(this._velocity, this._velocity, this._forward);
+        // Use squaredLength to avoid sqrt (saves a bit of performance)
+        const velSqMag = vec3.squaredLength(this._velocity);
 
-        const moveLeft = input.isKeyPressed('q') || (rightClickHeld && input.isKeyPressed('a'));
-        const moveRight = input.isKeyPressed('e') || (rightClickHeld && input.isKeyPressed('d'));
-
-        if (moveLeft) vec3.sub(this._velocity, this._velocity, this._right); // Strafe Left (relative to character)
-        if (moveRight) vec3.add(this._velocity, this._velocity, this._right); // Strafe Right (relative to character)
-
-        // Rotation
-        const dt = deltaTime * 0.001;
-
-        // Standard: +Rotation is CCW (Left). -Rotation is CW (Right).
-        if (rightClickHeld)
-        {
-            if (input.isKeyPressed('a')) this.rotation += this._rotationSpeed * dt; // A -> Left (CCW) -> +Rotation
-            if (input.isKeyPressed('d')) this.rotation -= this._rotationSpeed * dt; // D -> Right (CW) -> -Rotation
-        }
-
-        if (vec3.length(this._velocity) > 0)
+        if (velSqMag > 0.000001)
         {
             vec3.normalize(this._velocity, this._velocity);
             vec3.scale(this._velocity, this._velocity, this._speed * dt);
             vec3.add(this.position, this.position, this._velocity);
         }
 
+        const isRotatingLeft = input.isActionPressed(InputAction.TurnLeft);
+        const isRotatingRight = input.isActionPressed(InputAction.TurnRight);
+        const isStrafingLeft = input.isActionPressed(InputAction.StrafeLeft);
+        const isStrafingRight = input.isActionPressed(InputAction.StrafeRight);
+
+        // If we are strafing via RMB+A, we DON'T want to rotate (handles rebindable combinations)
+        const isLookRotating = input.isActionPressed(InputAction.LookRotate);
+
+        if (!isLookRotating)
+        {
+            if (isRotatingLeft && !isStrafingLeft) this.rotation += this._rotationSpeed * dt;
+            if (isRotatingRight && !isStrafingRight) this.rotation -= this._rotationSpeed * dt;
+        }
+
+        // NOTE: The "auto-orient to velocity" block was removed here to fix the infinite spinning loop
+        // and twitching. The character is now purely MMO-style character-relative, controlled explicitly by A/D or RMB.
+
         // Update mesh
-        // We cast to vec3 because gl-matrix accepts Float32Array
+        // Using vec3.copy to be safe with Float32Array types
         vec3.copy(this.mesh.position as vec3, this.position);
 
         // Rotate 180 to face -Z (Forward)
+        // Mesh.rotation is a vec3 (Euler angles) [Pitch, Yaw, Roll]
         this.mesh.rotation[1] = this.rotation + 180;
     }
 }

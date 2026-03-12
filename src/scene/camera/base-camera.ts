@@ -61,6 +61,8 @@ export class BaseCamera
     protected readonly _fallbackResources: FallbackResources;
     protected _currentReflectionTextureView: GPUTextureView;
 
+    protected readonly _defaultValues: { fov: number; near: number; far: number };
+
     // Cached objects to avoid per-frame allocations during matrix updates
     private readonly _clipPlaneCamera = vec4.create();
     private readonly _invView = mat4.create();
@@ -84,6 +86,9 @@ export class BaseCamera
         this._bindGroupLayouts = bindGroupLayouts;
         this._fallbackResources = fallbackResources;
         this._currentReflectionTextureView = reflectionTextureView;
+        
+        this._defaultValues = { fov: fovY, near, far };
+
         this._fovY = fovY;
         this._near = near;
         this._far = far;
@@ -119,6 +124,13 @@ export class BaseCamera
 
     public get fov(): number { return this._fovY; }
     public set fov(v: number) { this._fovY = v; this.updateMatrices(); }
+
+    public resetToDefaults(): void
+    {
+        this.fov = this._defaultValues.fov;
+        this.near = this._defaultValues.near;
+        this.far = this._defaultValues.far;
+    }
 
     public get near(): number { return this._near; }
     public set near(v: number) { this._near = v; this.updateMatrices(); }

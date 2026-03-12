@@ -85,6 +85,16 @@ export interface IDebugFolder
      * Adds a set of tabs inside this folder.
      */
     addTabs(options: { pages: { title: string }[] }): IDebugTabContainer;
+
+    /**
+     * Adds a visual separator.
+     */
+    addSeparator(): void;
+
+    /**
+     * Refreshes all bindings within this folder.
+     */
+    refresh(): void;
 }
 
 export interface IDebugBinding
@@ -97,7 +107,7 @@ export interface IDebugBinding
     /**
      * Triggers a callback when the binding value changes.
      */
-    onChange(callback: () => void): this;
+    onChange(callback: (value: any) => void): this;
 }
 
 export interface IDebugTabContainer

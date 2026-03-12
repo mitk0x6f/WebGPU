@@ -1,4 +1,4 @@
-![Version](https://img.shields.io/badge/Version-0.2.4-blue)
+![Version](https://img.shields.io/badge/Version-0.2.5-blue)
 ![WIP](https://img.shields.io/badge/Work_In_Progress-yellow)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
@@ -25,9 +25,6 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
   - Advanced camera-independent steering and `Right Mouse Button` rotation (rotate character while mouse dragging)
   - Character model smoothly catches up to camera heading when `Right Mouse Button` is held
   - Strafe movement with `A` and `D` while holding `Right Mouse Button`
-  - State machine (idle, walk)
-  - Smooth acceleration / deceleration curves
-  - Ground detection and slope handling
   - Input action mapping system
 - **Camera System** (In Development):
   - Reflection camera with oblique projection
@@ -38,9 +35,6 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
   - Dynamic camera position switching (Left Shoulder, Center, Right Shoulder via `1`, `2`, `3` keys) with ease-out quart transitions
   - Zero-allocation update loops (cached vectors) for ultra-responsive stutter-free performance
   - Camera smoothing (position and rotation lerp/slerp) with intelligent momentum stops
-  - Collision detection (prevents clipping through geometry)
-  - Look-at smoothing and FOV transitions
-  - Camera shake support
 - **Pointer Lock Integration**: Seamless 360-degree rotation with automatic cursor restoration
 - **Debug UI System**:
   - Abstraction layer (`IDebugUI`) for backend-agnostic implementation
@@ -130,7 +124,7 @@ The Tweakpane implementation is considered temporary (marked with `! TEMPORARY U
   - [ ] Smooth acceleration/deceleration curves
   - [ ] Ground detection and snapping
   - [ ] Slope handling
-  - [ ] Input action mapping
+  - [x] Input action mapping
 - [x] Implement camera system
   - [x] Refactor camera into base class + controllers
   - [x] Third-person camera controller

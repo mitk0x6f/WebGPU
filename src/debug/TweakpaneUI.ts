@@ -23,6 +23,7 @@ export class TweakpaneUI implements IDebugUI
         element.style.top = '10px';
         element.style.right = '10px';
         element.style.width = '300px';
+        element.style.maxHeight = '90vh';
         element.style.cursor = 'default';
         element.style.zIndex = '1000';
 
@@ -40,6 +41,7 @@ export class TweakpaneUI implements IDebugUI
 
         // Simple Drag implementation via title element
         const titleElement = element.querySelector('.tp-rotv_t') as HTMLElement;
+
         if (titleElement)
         {
             titleElement.style.cursor = 'move';
@@ -168,9 +170,9 @@ class TweakpaneBinding implements IDebugBinding
         this.binding.disabled = value;
     }
 
-    onChange(callback: () => void): this
+    onChange(callback: (value: any) => void): this
     {
-        this.binding.on('change', callback);
+        this.binding.on('change', (ev: any) => callback(ev.value));
 
         return this;
     }
@@ -226,5 +228,15 @@ class TweakpaneFolder implements IDebugFolder
     addTabs(options: { pages: { title: string }[] }): IDebugTabContainer
     {
         return new TweakpaneTabContainer(this.folder.addTab(options));
+    }
+
+    addSeparator(): void
+    {
+        this.folder.addBlade({ view: 'separator' });
+    }
+
+    refresh(): void
+    {
+        this.folder.refresh();
     }
 }
