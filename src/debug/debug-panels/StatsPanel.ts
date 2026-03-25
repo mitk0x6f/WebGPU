@@ -46,9 +46,9 @@ export function createStatsDebugPanel(folder: IDebugFolder): { update: (deltaTim
 
         statsFolder.addBinding(state, 'frameCount', { readonly: true, label: 'Frame Count' });
 
-        const utilsFolder = folder.addFolder('Utilities');
-        utilsFolder.addButton('Visit Project GitHub', () => window.open('https://github.com/mitk0x6f/WebGPU', '_blank'));
-        utilsFolder.addButton('Reload Page', () => window.location.reload());
+        folder.addBlade({ view: 'separator' });
+        folder.addButton('Visit Project GitHub', () => window.open('https://github.com/mitk0x6f/WebGPU', '_blank'));
+        folder.addButton('Reload Page', () => window.location.reload());
 
         let fpsTimer = 0;
         let framesThisSecond = 0;

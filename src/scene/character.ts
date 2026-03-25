@@ -5,61 +5,149 @@ import { vec3 } from 'gl-matrix';
 import { InputManager } from '../core/input-manager';
 import { InputAction } from '../core/input-action';
 import { DEG_TO_RAD } from '../core/math-constants';
+import { PhysicsWorld } from '../physics/physics-world';
+import { Ray } from '../physics/ray';
+import { RaycastHit } from '../physics/collider';
 import { Mesh } from './renderables/mesh';
+
+/**
+ * Distance above the character's feet origin from which the downward ray is cast.
+ * Must be large enough to still hit the ground when the character is standing on it.
+ */
+const GROUND_RAY_ORIGIN_OFFSET = 0.5;
+
+/**
+ * Maximum distance downward the ray travels to detect ground.
+ */
+const GROUND_RAY_MAX_DISTANCE   = 1.0;
+
+/**
+ * When airborne this amount of gravity (m/s²) is applied downward each second.
+ */
+const GRAVITY = 9.81;
+
+/**
+ * Maximum surface slope angle (degrees) the character can walk on without sliding.
+ */
+const MAX_SLOPE_ANGLE_DEG = 46;
+
+/**
+ * Distance from the character center to the collision boundary.
+ */
+const COLLISION_RADIUS = 0.4;
+
+/**
+ * Height above the character feet to cast horizontal "wall" rays.
+ */
+const WALL_RAY_ORIGIN_HEIGHT = 1.0;
 
 export class Character
 {
     public readonly mesh: Mesh;
 
     public position = vec3.create();
+
     /**
-     * Rotation in degrees
+     * Rotation around the Y-axis in degrees.
+     * Positive = CCW when viewed from above.
      */
     public rotation = 0;
 
+    // * Movement config
+
     /**
-     * Character speed in m/s
+     * Linear speed (m/s).
      */
     private _speed = 3;
+
     /**
-     * Rotation speed in degrees per second
+     * Yaw speed (degrees/s).
      */
     private _rotationSpeed = 120;
 
-    // Cached vectors to avoid per-frame allocations (prevents GC stutters)
+    // * Physics state
+
+    /**
+     * Vertical velocity (m/s, positive = up). Applied when airborne.
+     */
+    private _verticalVelocity = 0;
+
+    /**
+     * Whether the character is touching a walkable surface this frame.
+     */
+    private _isGrounded = false;
+
+    // * Cached vectors — allocated once to avoid per-frame GC pressure.
+
     private readonly _forward = vec3.create();
     private readonly _right = vec3.create();
     private readonly _velocity = vec3.create();
+    private readonly _rayOrigin = vec3.create();
+    private readonly _rayDir = vec3.fromValues(0, -1, 0);
+    private readonly _groundPoint = vec3.create();
+    private readonly _groundNormal = vec3.create();
+
+    // Reusable downward ray (re-used every frame, origin updated before use).
+    private readonly _groundRay: Ray;
+
+    // Reusable horizontal wall rays.
+    private readonly _wallRay: Ray;
+    private readonly _wallRayOrigin = vec3.create();
+    private readonly _wallRayDir = vec3.create();
+
+    // Reusable hit objects (zero-allocation physics)
+    private readonly _groundHit: RaycastHit;
+    private readonly _wallHitX: RaycastHit;
+    private readonly _wallHitZ: RaycastHit;
 
     constructor(mesh: Mesh)
     {
         this.mesh = mesh;
+        // Pre-allocate the raycast objects. Origins will be set each frame.
+        this._groundRay = new Ray(this._rayOrigin, this._rayDir);
+        this._wallRay = new Ray(this._wallRayOrigin, this._wallRayDir);
+
+        this._groundHit = new RaycastHit();
+        this._wallHitX  = new RaycastHit();
+        this._wallHitZ  = new RaycastHit();
     }
 
-    public update(deltaTime: number, input: InputManager, ignoreInput = false): void
-    {
-        if (ignoreInput) return;
+    // * Public API
 
+    /**
+     * True if the character was standing on a walkable surface during the last update.
+     */
+    public get isGrounded(): boolean { return this._isGrounded; }
+
+    /**
+     * Per-frame update. Must be called once per game tick.
+     *
+     * @param deltaTime - Elapsed time in **milliseconds**.
+     * @param input - Current input manager.
+     * @param physics - The physics world containing all static colliders.
+     * @param ignoreInput - When true, halts all movement (e.g. UI focused).
+     */
+    public update(
+        deltaTime: number,
+        input: InputManager,
+        physics: PhysicsWorld,
+        ignoreInput = false
+    ): void
+    {
+        // convert ms → s
         const dt = deltaTime * 0.001;
 
-        // Calculate local axes based on current rotation
+        // * 1. Ground detection via downward raycast
+        this._detectGround(dt, physics);
+
+        if (ignoreInput) return;
+
+        // * 2. Horizontal movement
         const rad = this.rotation * DEG_TO_RAD;
 
-        // Standard WebGPU: Forward is -Z, Right is +X
-        // => 0 deg -> -Z (Forward)
-        // +Rotation = CCW
-        // 90 deg (CCW) -> -X (Forward)
-
-        // Forward:
-        // x = -sin(rad)
-        // z = -cos(rad)
+        // Standard WebGPU convention: Forward = -Z, Right = +X at 0°.
         vec3.set(this._forward, -Math.sin(rad), 0, -Math.cos(rad));
-
-        // Right:
-        // x = cos(rad)
-        // z = -sin(rad)
         vec3.set(this._right, Math.cos(rad), 0, -Math.sin(rad));
-
         vec3.zero(this._velocity);
 
         if (input.isActionPressed(InputAction.MoveForward)) vec3.add(this._velocity, this._velocity, this._forward);
@@ -67,23 +155,59 @@ export class Character
         if (input.isActionPressed(InputAction.StrafeLeft)) vec3.sub(this._velocity, this._velocity, this._right);
         if (input.isActionPressed(InputAction.StrafeRight)) vec3.add(this._velocity, this._velocity, this._right);
 
-        // Use squaredLength to avoid sqrt (saves a bit of performance)
-        const velSqMag = vec3.squaredLength(this._velocity);
-
-        if (velSqMag > 0.000001)
+        if (vec3.squaredLength(this._velocity) > 0.000001)
         {
             vec3.normalize(this._velocity, this._velocity);
             vec3.scale(this._velocity, this._velocity, this._speed * dt);
-            vec3.add(this.position, this.position, this._velocity);
+
+            // * Horizontal Collision Detection (X, Z sliding)
+            // We check X and Z movement separately to allow sliding along walls.
+            // Rays are cast at waist-height to detect vertical surfaces (cubes).
+
+            vec3.set(this._wallRayOrigin, this.position[0], this.position[1] + WALL_RAY_ORIGIN_HEIGHT, this.position[2]);
+
+            // Check X collision
+            if (this._velocity[0] !== 0)
+            {
+                vec3.set(this._wallRayDir, Math.sign(this._velocity[0]), 0, 0);
+                vec3.copy(this._wallRay.origin, this._wallRayOrigin);
+                vec3.copy(this._wallRay.direction, this._wallRayDir);
+
+                if (physics.raycast(this._wallRay, this._wallHitX))
+                {
+                    if (this._wallHitX.distance < COLLISION_RADIUS + Math.abs(this._velocity[0]))
+                    {
+                        this._velocity[0] = 0;
+                    }
+                }
+            }
+
+            // Check Z collision
+            if (this._velocity[2] !== 0)
+            {
+                vec3.set(this._wallRayDir, 0, 0, Math.sign(this._velocity[2]));
+                vec3.copy(this._wallRay.origin, this._wallRayOrigin);
+                vec3.copy(this._wallRay.direction, this._wallRayDir);
+
+                if (physics.raycast(this._wallRay, this._wallHitZ))
+                {
+                    if (this._wallHitZ.distance < COLLISION_RADIUS + Math.abs(this._velocity[2]))
+                    {
+                        this._velocity[2] = 0;
+                    }
+                }
+            }
+
+            this.position[0] += this._velocity[0];
+            this.position[2] += this._velocity[2];
         }
 
+        // * 3. Yaw rotation (Q/E or camera-driven)
+        const isLookRotating = input.isActionPressed(InputAction.LookRotate);
         const isRotatingLeft = input.isActionPressed(InputAction.TurnLeft);
         const isRotatingRight = input.isActionPressed(InputAction.TurnRight);
         const isStrafingLeft = input.isActionPressed(InputAction.StrafeLeft);
         const isStrafingRight = input.isActionPressed(InputAction.StrafeRight);
-
-        // If we are strafing via RMB+A, we DON'T want to rotate (handles rebindable combinations)
-        const isLookRotating = input.isActionPressed(InputAction.LookRotate);
 
         if (!isLookRotating)
         {
@@ -91,15 +215,68 @@ export class Character
             if (isRotatingRight && !isStrafingRight) this.rotation -= this._rotationSpeed * dt;
         }
 
-        // NOTE: The "auto-orient to velocity" block was removed here to fix the infinite spinning loop
-        // and twitching. The character is now purely MMO-style character-relative, controlled explicitly by A/D or RMB.
-
-        // Update mesh
-        // Using vec3.copy to be safe with Float32Array types
+        // * 4. Sync mesh to logical position / rotation
         vec3.copy(this.mesh.position as vec3, this.position);
+        this.mesh.rotation[1] = this.rotation + 180; // Model faces -Z at 0°
+    }
 
-        // Rotate 180 to face -Z (Forward)
-        // Mesh.rotation is a vec3 (Euler angles) [Pitch, Yaw, Roll]
-        this.mesh.rotation[1] = this.rotation + 180;
+    // * Private helpers
+
+    /**
+     * Casts a ray straight down from slightly above the character's feet.
+     * - If a walkable surface is found within `GROUND_RAY_MAX_DISTANCE`, the
+     *   character is "grounded": Y is snapped to the hit point and vertical
+     *   velocity is zeroed.
+     * - If no surface is found, gravity accelerates the character downward.
+     * - Slopes steeper than `MAX_SLOPE_ANGLE_DEG` are ignored so the character
+     *   cannot "snap" onto a vertical wall.
+     */
+    private _detectGround(dt: number, physics: PhysicsWorld): void
+    {
+        // Place ray origin slightly above the feet so the ray passes through
+        // small micro-geometry before reaching the floor plane.
+        vec3.set(
+            this._rayOrigin,
+            this.position[0],
+            this.position[1] + GROUND_RAY_ORIGIN_OFFSET,
+            this.position[2]
+        );
+        // Update the cached Ray's origin in-place (avoid allocation).
+        vec3.copy(this._groundRay.origin, this._rayOrigin);
+
+        if (physics.raycast(this._groundRay, this._groundHit))
+        {
+            if (this._groundHit.distance <= GROUND_RAY_ORIGIN_OFFSET + GROUND_RAY_MAX_DISTANCE)
+            {
+                // Compute slope: angle between surface normal and world-up (0, 1, 0).
+                const slopeAngleDeg = Math.acos(
+                    Math.max(-1, Math.min(1, this._groundHit.normal[1]))  // dot with (0, 1, 0)
+                ) * (180 / Math.PI);
+
+                if (slopeAngleDeg <= MAX_SLOPE_ANGLE_DEG)
+                {
+                    // Walkable surface — snap Y and clear vertical velocity.
+                    vec3.copy(this._groundPoint,  this._groundHit.point);
+                    vec3.copy(this._groundNormal, this._groundHit.normal);
+
+                    this.position[1] = this._groundHit.point[1];
+                    this._verticalVelocity = 0;
+                    this._isGrounded = true;
+
+                    // Sync mesh immediately after snap.
+                    vec3.copy(this.mesh.position as vec3, this.position);
+
+                    return;
+                }
+            }
+        }
+
+        // No walkable ground found — apply gravity.
+        this._isGrounded = false;
+        this._verticalVelocity -= GRAVITY * dt;
+        this.position[1] += this._verticalVelocity * dt;
+
+        // Update mesh right away so it doesn't lag by a frame.
+        vec3.copy(this.mesh.position as vec3, this.position);
     }
 }

@@ -124,6 +124,7 @@ export async function initializeScene(renderer: Renderer, camera: BaseCamera): P
 
     const skybox = scene.createSkybox(material_skybox);
     skybox.scale = Float32Array.from([500, 500, 500]);
+    skybox.collisionEnabled = false; // Decorative — non-collidable
 
     const water = scene.createQuad(material_water);
     water.name = 'water'; // TODO: Make water a separate class, so we can omit Renderable.name
@@ -143,6 +144,17 @@ export async function initializeScene(renderer: Renderer, camera: BaseCamera): P
     // ! TO HERE
     water.scale = Float32Array.from([texture_water_stretch_x, 1, texture_water_stretch_y]);
 
+    // Water is a physical walkable surface — collisionEnabled stays true (default).
+    // The character walks on it and will fall off the edge when reaching the boundary.
+
+    // ------------------------------------------------------------------
+    // Physics world
+    // ------------------------------------------------------------------
+    // Auto-collision: PhysicsWorld reads each mesh's `localBounds` AABB (computed from
+    // vertex data during construction) and derives world-space BoxColliders.
+    // No separate invisible collision objects are created.
+    // Meshes opt out via `collisionEnabled = false` (skybox, character self-mesh).
+
     const chunk = 3;
 
     for (let x = 0; x < chunk; x++)
@@ -152,12 +164,16 @@ export async function initializeScene(renderer: Renderer, camera: BaseCamera): P
             for (let z = 0; z < chunk; z++)
             {
                 const cube = scene.createCube(material_cube);
-                // Position cubes in a 10x10x10 grid centered at origin
-                cube.position = Float32Array.from([
-                    5 + x - chunk * 0.5 + 0.5,  // Center X around origin
-                    3 + y - chunk * 0.5 + 0.5,  // Center Y around origin
-                    -15 - z - chunk * 0.5 + 0.5   // Center Z around origin
-                ]);
+
+                // Position cubes in a 3×3×3 grid
+                const cx = 5 + x - chunk * 0.5 + 0.5;
+                const cy = 1.0 + y; // First layer center at 1.0 (half-player-height above water level -0.5)
+                const cz = -15 - z - chunk * 0.5 + 0.5;
+
+                cube.position = Float32Array.from([cx, cy, cz]);
+
+                // collisionEnabled stays true (default) — auto-registered below
+
                 // Assign all cubes to a single group
                 scene.groupManager.assign(cube, 2);
             }
@@ -182,6 +198,9 @@ export async function initializeScene(renderer: Renderer, camera: BaseCamera): P
 
     // Load Character
     const characterMesh = await loadMeshFromFBX(renderer.device, 'models/character.fbx', renderer.bindGroupLayouts, renderer.fallbackResources);
+    // The character mesh is the player entity itself — it must not collide with its own body.
+    characterMesh.collisionEnabled = false;
+
     scene.addMesh(characterMesh, material_standard);
 
     const character = new Character(characterMesh);
@@ -194,27 +213,20 @@ export async function initializeScene(renderer: Renderer, camera: BaseCamera): P
     scene.groupManager.assign(water, 1);
     // Assign character to group 3
     scene.groupManager.assign(characterMesh, 3);
+
+    // Auto-generate collision shapes from each mesh's vertex geometry.
+    // Must be called AFTER all positions and scales are set.
+    scene.buildPhysicsWorld();
+
     return { scene, character };
 }
 
-// TODO: Remove the underscore from deltaTime parameter when it's in use
-export function updateScene(scene: Scene, camera: BaseCamera, globalTime: number, _deltaTime: number): void
+/**
+ * Per-frame scene update: uploads model matrices to the GPU.
+ * Character position/rotation are driven by Character.update() + physics — NOT here.
+ */
+export function updateScene(scene: Scene, camera: BaseCamera): void
 {
-    const characterMesh = scene.getMeshesByGroup(3);
-
-    const hStart = -0.4;
-    const hEnd = -0.3;
-    const speed = 0.001;
-
-    for (let i = 0; i < characterMesh.length; i++)
-    {
-        const character = characterMesh[i];
-
-        const t = (Math.sin(globalTime * speed) + 1) * 0.5;
-
-        character.position[1] = hStart + t * (hEnd - hStart);
-    }
-
     for (const mesh of scene.meshes)
     {
         if (!mesh.visible) continue;

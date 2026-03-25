@@ -6,6 +6,7 @@ import { mat4, quat } from "gl-matrix";
 
 import { BindGroupIndex } from "../../core/bindgroup-indices";
 import type { BindGroupLayouts } from "../../core/bindgroup-layouts";
+import { AABB } from "../../physics/aabb";
 import { Renderable } from "./renderable";
 
 export interface SubMesh {
@@ -33,6 +34,12 @@ export class Mesh extends Renderable
     public subMeshes: SubMesh[] = [];
     public pipeline: GPURenderPipeline | null = null;
 
+    /** Axis-aligned bounding box in local mesh space (un-scaled, un-translated).
+     *  PhysicsWorld.registerScene() uses this + the mesh's current world transform
+     *  to auto-generate the appropriate collision shape — no separate invisible
+     *  objects needed. */
+    public readonly localBounds: AABB;
+
     get indexCount(): number
     {
         return this._indexCount;
@@ -47,6 +54,28 @@ export class Mesh extends Renderable
     )
     {
         super();
+
+        // ------------------------------------------------------------------
+        // Compute local-space AABB from vertex positions.
+        // The PositionNormalUV format has 8 floats per vertex; positions occupy
+        // the first 3 of each stride. We read only position components here.
+        // ------------------------------------------------------------------
+        this.localBounds = new AABB();
+        const STRIDE = 8;
+
+        for (let i = 0; i < vertexData.length; i += STRIDE)
+        {
+            const x = vertexData[i];
+            const y = vertexData[i + 1];
+            const z = vertexData[i + 2];
+
+            if (x < this.localBounds.min[0]) this.localBounds.min[0] = x;
+            if (y < this.localBounds.min[1]) this.localBounds.min[1] = y;
+            if (z < this.localBounds.min[2]) this.localBounds.min[2] = z;
+            if (x > this.localBounds.max[0]) this.localBounds.max[0] = x;
+            if (y > this.localBounds.max[1]) this.localBounds.max[1] = y;
+            if (z > this.localBounds.max[2]) this.localBounds.max[2] = z;
+        }
 
         this._modelBuffer = device.createBuffer({
             size: 80, // modelMatrix = 64, remaining 16 = ? scale ?

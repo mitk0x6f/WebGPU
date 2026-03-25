@@ -1,4 +1,4 @@
-![Version](https://img.shields.io/badge/Version-0.2.5-blue)
+![Version](https://img.shields.io/badge/Version-0.2.6-blue)
 ![WIP](https://img.shields.io/badge/Work_In_Progress-yellow)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
@@ -26,6 +26,14 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
   - Character model smoothly catches up to camera heading when `Right Mouse Button` is held
   - Strafe movement with `A` and `D` while holding `Right Mouse Button`
   - Input action mapping system
+  - Ground detection via downward raycast with gravity and vertical snapping
+  - Horizontal collision detection with smooth wall-sliding (independent X/Z axis evaluation)
+  - Slope detection: surfaces steeper than 46° are treated as impassable
+- **Physics Module** (New):
+  - Custom pure-TypeScript, zero-dependency collision system (`src/physics/`)
+  - `Ray` / AABB math with Möller–Trumbore triangle intersection
+  - `Collider` abstraction with `BoxCollider` implementation
+  - `PhysicsWorld` spatial query manager with broadphase AABB culling
 - **Camera System** (In Development):
   - Reflection camera with oblique projection
   - Dual camera modes with seamless switching
@@ -122,8 +130,8 @@ The Tweakpane implementation is considered temporary (marked with `! TEMPORARY U
   - [x] Basic character movement `WASD` + `QE`
   - [ ] Character state machine (idle, walk)
   - [ ] Smooth acceleration/deceleration curves
-  - [ ] Ground detection and snapping
-  - [ ] Slope handling
+  - [x] Ground detection and snapping
+  - [x] Slope handling (> 46° impassable)
   - [x] Input action mapping
 - [x] Implement camera system
   - [x] Refactor camera into base class + controllers

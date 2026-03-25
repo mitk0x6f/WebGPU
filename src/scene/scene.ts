@@ -1,7 +1,12 @@
 // scene/scene.ts
+//
+// Owns all scene objects (meshes, skybox) and the integrated physics world.
+// Physics colliders are auto-derived from mesh geometry — call `buildPhysicsWorld()`
+// once after all positions/scales are finalized.
 
 import type { BindGroupLayouts } from '../core/bindgroup-layouts';
 import type { FallbackResources } from '../core/fallback-resources';
+import { PhysicsWorld } from '../physics/physics-world';
 import { GroupManager } from './renderables/group-manager';
 import { Mesh } from './renderables/mesh';
 import { Skybox } from './renderables/skybox';
@@ -16,6 +21,12 @@ export class Scene
     private readonly _fallbackResources: FallbackResources;
 
     public readonly groupManager: GroupManager;
+    /**
+     * The physics world for this scene.
+     * Call `buildPhysicsWorld()` once, after all mesh positions/scales are finalized,
+     * to auto-populate it from scene geometry.
+     */
+    public readonly physicsWorld: PhysicsWorld;
 
     constructor(
         device: GPUDevice,
@@ -27,6 +38,17 @@ export class Scene
         this._bindGroupLayouts = bindGroupLayouts;
         this._fallbackResources = fallbackResources;
         this.groupManager = new GroupManager();
+        this.physicsWorld = new PhysicsWorld();
+    }
+
+    /**
+     * Scans all scene meshes and auto-generates collision shapes from their vertex geometry.
+     * Must be called **once**, after all mesh positions and scales have been assigned.
+     * Meshes with `collisionEnabled = false` are skipped (skybox, character self-mesh, etc.).
+     */
+    public buildPhysicsWorld(): void
+    {
+        this.physicsWorld.registerScene(this);
     }
 
     get meshes(): Mesh[]

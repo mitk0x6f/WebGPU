@@ -4,6 +4,53 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.2.6] - 2026-03-25
+
+### 🚀 Core Engine
+
+- **Physics Module** (`src/physics/`) — custom pure-TypeScript collision system, zero external dependencies:
+  - **Strict Zero-Allocation (NEW)**: Raycasts use an out-parameter pattern (`physics.raycast(ray, hit)`) and static scratchpads, resulting in 0 bytes allocated per frame during collision queries.
+  - `aabb.ts`: Axis-Aligned Bounding Box math with `expandByPoint` and `intersects`
+  - `ray.ts`: Ray class with Möller–Trumbore ray-triangle intersection and slab-method AABB intersection
+  - `collider.ts`: Abstract `Collider` interface and concrete `BoxCollider` with world-space AABB broadphase and exact OBB narrowphase
+  - `physics-world.ts`: Internal spatial query manager — `registerScene()` auto-derives one `BoxCollider` per mesh from vertex geometry
+- **Integrated Scene Physics**:
+  - `Scene` now owns its `PhysicsWorld` instance. Call `scene.buildPhysicsWorld()` to auto-generate colliders
+  - `PhysicsWorld` is no longer exposed as a separate manual dependency in `bootstrap` or `main`
+
+### 🎮 Character Controller
+
+- **Horizontal Collision (Wall-Sliding)**:
+  - Implemented waist-height horizontal raycasting in movement directions.
+  - Character now slides along walls/cubes instead of clipping through them.
+  - X and Z components are checked independently to ensure smooth sliding.
+- **Ground Detection & Snapping**:
+  - Per-frame downward raycast from a configurable step height above the character's feet
+  - `Y`-position snaps instantly to the hit surface when within `GROUND_RAY_MAX_DISTANCE`
+- **Gravity & Falling**:
+  - Applies `9.81 m/s²` downward vertical velocity when no ground is detected
+  - Character falls naturally off edges (e.g., reaching the boundary of the water quad)
+- **Slope Handling**:
+  - Surface normals compared against world-up via dot product
+  - Surfaces steeper than `MAX_SLOPE_ANGLE_DEG` (46°) are ignored — character cannot snap to or climb walls
+- **Auto-Collision Registration**:
+  - `Mesh` computes `localBounds: AABB` from vertex positions during construction (stride-8 format)
+  - `Renderable` gains `collisionEnabled: boolean` to opt out of physical interactions (skybox, etc.)
+
+### 🧰 Build & Quality
+
+- **Collision Testing Environment**: Raised the 3×3×3 cluster of scene cubes to start at `Y = +1.0` (precisely half-player height above the water level) to provide a sharp testing ground for waist-level horizontal raycasts
+- **Debug UI Enhancements**: Unpacked the `Visit Project GitHub` and `Reload Page` helper buttons from the nested "Utilities" folder directly into the root of the "Stats" tab for quicker developer access
+- Removed conflicting sine-wave character `Y` animation from `updateScene` — character vertical position is now exclusively owned by the physics system
+- Simplified `updateScene` signature (removed unused `globalTime` / `deltaTime` parameters)
+- All new files use `type`-only imports where required by `verbatimModuleSyntax`
+
+### 📖 Documentation
+
+- Updated `README.md`: version badge → 0.2.6, new Physics Module feature section, ground detection & slope handling marked complete in TODO
+
+---
+
 ## [0.2.5] - 2026-03-12
 
 ### 🎮 Input & Camera

@@ -12,6 +12,8 @@ export abstract class Renderable
     public scale: Float32Array = new Float32Array(vec3.fromValues(1, 1, 1));
     public visible = true;
 
+    public collisionEnabled: boolean = true;
+
     abstract bind(pass: GPURenderPassEncoder): void;
     abstract destroy(): void;
 }

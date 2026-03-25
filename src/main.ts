@@ -104,12 +104,12 @@ async function main()
 
         if (activeController === tpcController)
         {
-            character.update(deltaTime, inputManager, isUIFocused);
+            character.update(deltaTime, inputManager, scene.physicsWorld, isUIFocused);
         }
 
         activeController.update(deltaTime, inputManager, isUIFocused);
 
-        updateScene(scene, camera, globalTime, deltaTime);
+        updateScene(scene, camera);
 
         renderer.render(scene, camera, timestamp);
 
