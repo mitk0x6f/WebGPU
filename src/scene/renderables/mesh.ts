@@ -23,13 +23,14 @@ export class Mesh extends Renderable
     private _modelMatrix = mat4.create();
     private _rotationQuat = quat.create();
 
-    private _modelData = new Float32Array(20);
+    private _modelData = new Float32Array(24);
 
     private _modelBuffer!: GPUBuffer;
     private _modelBindGroup!: GPUBindGroup;
 
     public readonly type = 'mesh';
     public translucent: boolean = false;
+    public tint = Float32Array.from([1.0, 1.0, 1.0, 1.0]);
     public materialBindGroups: GPUBindGroup[] = [];
     public subMeshes: SubMesh[] = [];
     public pipeline: GPURenderPipeline | null = null;
@@ -78,7 +79,7 @@ export class Mesh extends Renderable
         }
 
         this._modelBuffer = device.createBuffer({
-            size: 80, // modelMatrix = 64, remaining 16 = ? scale ?
+            size: 96, // modelMatrix = 64, scale = 16, tint = 16
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
 
@@ -136,9 +137,10 @@ export class Mesh extends Renderable
         quat.fromEuler(this._rotationQuat, this.rotation[0], this.rotation[1], this.rotation[2]);
         mat4.fromRotationTranslationScale(this._modelMatrix, this._rotationQuat, this.position, this.scale);
 
-        // Copy data to buffer
-        this._modelData.set(this._modelMatrix, 0);
-        this._modelData.set(this.scale, 16);
+        // Copy data to buffer: modelMatrix(64B) + scale(16B) + tint(16B) = 96B
+        this._modelData.set(this._modelMatrix, 0); // float offset 0
+        this._modelData.set(this.scale, 16); // float offset 16
+        this._modelData.set(this.tint, 20); // float offset 20
 
         // Write to GPU buffer
         // Could be used without .buffer, but this way is safer

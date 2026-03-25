@@ -203,6 +203,11 @@ class TweakpaneFolder implements IDebugFolder
         this.folder = folder;
     }
 
+    get element(): HTMLElement
+    {
+        return this.folder.element;
+    }
+
     addBinding<T extends object>(target: T, key: keyof T, options?: any): IDebugBinding
     {
         return new TweakpaneBinding(this.folder.addBinding(target, key as any, options));

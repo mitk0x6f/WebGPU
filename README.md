@@ -1,4 +1,4 @@
-![Version](https://img.shields.io/badge/Version-0.2.6-blue)
+![Version](https://img.shields.io/badge/Version-0.2.7-blue)
 ![WIP](https://img.shields.io/badge/Work_In_Progress-yellow)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
@@ -29,6 +29,8 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
   - Ground detection via downward raycast with gravity and vertical snapping
   - Horizontal collision detection with smooth wall-sliding (independent X/Z axis evaluation)
   - Slope detection: surfaces steeper than 46° are treated as impassable
+  - **State Machine**: Idle and Walk states with zero-allocation transition logic
+  - **Debug tint overlay**: optional per-state mesh colour coding (White = Idle, Yellow = Walk), toggled from the debug UI
 - **Physics Module** (New):
   - Custom pure-TypeScript, zero-dependency collision system (`src/physics/`)
   - `Ray` / AABB math with Möller–Trumbore triangle intersection
@@ -52,6 +54,8 @@ A modular WebGPU application built with Vite and TypeScript, featuring atmospher
   - Deep parameter binding with reactive state (e.g., conditional disabling of controls)
   - Zero-allocation data binding via proxy adapters
   - Interaction-aware input muting (hover vs. active UI engagement)
+  - **State Debug Panel**: live current-state display, state tint overlay toggle, and dual-vector 2D canvas graph (velocity + camera look direction)
+  - **Keybinding panel**: full rebind support per action with modifier key capture, automatic conflict resolution on rebind, and correct UI refresh on reset
 
 ---
 
@@ -128,7 +132,7 @@ The Tweakpane implementation is considered temporary (marked with `! TEMPORARY U
 - [x] Implement character controller
   - [x] FBX model loader
   - [x] Basic character movement `WASD` + `QE`
-  - [ ] Character state machine (idle, walk)
+  - [x] Character state machine (idle, walk)
   - [ ] Smooth acceleration/deceleration curves
   - [x] Ground detection and snapping
   - [x] Slope handling (> 46° impassable)
@@ -148,6 +152,8 @@ The Tweakpane implementation is considered temporary (marked with `! TEMPORARY U
   - [x] Backend-agnostic abstraction layer
   - [x] Tweakpane integration
   - [x] Draggable/Tabbed interface with performance graphs
+  - [x] State debug panel with 2D vector graph
+  - [x] Keybinding panel with conflict resolution
   - [ ] Replace with a custom WebGPU-rendered UI system
 - [ ] Add LICENSE.md
 

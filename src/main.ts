@@ -9,7 +9,7 @@ import { FreeCameraController } from './scene/camera/free-camera-controller';
 import { ThirdPersonCameraController } from './scene/camera/third-person-camera-controller';
 import { initializeScene, updateScene } from './scene/bootstrap';
 // ! TEMPORARY UI IMPLEMENTATION [START]
-import { TweakpaneUI, createCameraDebugPanel, createStatsDebugPanel, createSettingsDebugPanel } from './debug';
+import { TweakpaneUI, createCameraDebugPanel, createStatsDebugPanel, createSettingsDebugPanel, createStateDebugPanel } from './debug';
 
 // ! TEMPORARY UI IMPLEMENTATION [END]
 
@@ -43,13 +43,15 @@ async function main()
             pages: [
                 { title: 'Stats' },
                 { title: 'Controls' },
-                { title: 'Camera' }
+                { title: 'Camera' },
+                { title: 'State' }
             ]
         });
 
         statsDebug = createStatsDebugPanel(tabs.pages[0]);
         createSettingsDebugPanel(tabs.pages[1], inputMapper, inputManager);
         createCameraDebugPanel(tabs.pages[2], camera, tpcController);
+        createStateDebugPanel(tabs.pages[3], character, camera);
 
     }
     catch (e)

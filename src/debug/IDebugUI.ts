@@ -55,6 +55,11 @@ export interface IDebugUI
 export interface IDebugFolder
 {
     /**
+     * The raw DOM element for this folder.
+     */
+    readonly element: HTMLElement;
+
+    /**
      * Adds an interactive binding to a property of an object.
      * @param target The object containing the property.
      * @param key The property key to bind to.

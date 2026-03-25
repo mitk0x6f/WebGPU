@@ -23,7 +23,9 @@ export function createSettingsDebugPanel(folder: IDebugFolder, inputMapper: Inpu
         const kbPage = tabs.pages[0];
         const gpPage = tabs.pages[1];
 
-        // * Keybindings *
+        // Track all binding state objects so the Reset button can sync the display
+        const allBindingStates: Array<{ state: { key: string }, action: InputAction }> = [];
+
         const bindAction = (parent: IDebugFolder, action: InputAction, label: string) => {
             const binding = inputMapper.getBinding(action);
 
@@ -39,6 +41,8 @@ export function createSettingsDebugPanel(folder: IDebugFolder, inputMapper: Inpu
                 isRecording: false
             };
 
+            allBindingStates.push({ state, action });
+
             const debugBinding = parent.addBinding(state, 'key', { readonly: true, label });
 
             parent.addButton('Rebind', () => {
@@ -50,10 +54,18 @@ export function createSettingsDebugPanel(folder: IDebugFolder, inputMapper: Inpu
 
                 const stopRecording = (newBinding: any) => {
                     inputMapper.setBinding(action, newBinding);
-                    state.key = getDisplayString(newBinding);
+
+                    // After conflict resolution, refresh ALL displayed bindings
+                    // because another action may have been unbound silently
+                    for (const entry of allBindingStates)
+                    {
+                        entry.state.key = getDisplayString(inputMapper.getBinding(entry.action));
+                    }
+
                     state.isRecording = false;
                     debugBinding.disabled = false;
 
+                    kbPage.refresh();
                     window.removeEventListener('keyup', onKeyUp);
                     window.removeEventListener('mouseup', onMouseUp);
                     window.removeEventListener('contextmenu', preventDefault);
@@ -117,6 +129,18 @@ export function createSettingsDebugPanel(folder: IDebugFolder, inputMapper: Inpu
             if (confirm('Reset all keybindings to defaults?'))
             {
                 inputMapper.resetBindingsToDefaults();
+
+                // Sync every displayed binding state back from the fresh defaults
+                for (const entry of allBindingStates)
+                {
+                    const getDisplayString = (b: InputBinding | InputBinding[] | null): string => {
+                        if (!b) return 'None';
+                        if (Array.isArray(b)) return b.map(bindingToString).join(' / ');
+
+                        return bindingToString(b);
+                    };
+                    entry.state.key = getDisplayString(inputMapper.getBinding(entry.action));
+                }
 
                 kbPage.refresh();
             }

@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.2.7] - 2026-03-25
+
+### 🎮 Character Controller
+
+- **State Machine Architecture**:
+  - Transitioned character logic to a modern, scalable standard State Machine
+  - Implemented data-driven logic transitions using State IDs for zero-allocation execution during gameplay
+  - Separated `IdleState` and `WalkState` while retaining shared physics evaluation in the `Character` facade
+- **State-Based Tint Overlay**:
+  - Added `debugStateTint: boolean` public flag to `Character`; when enabled, the mesh tint updates every frame based on the active state — `White` (Idle) / `Yellow` (Walk)
+  - Tint automatically reverts to `White` when the flag is toggled off
+  - Centralised tinting logic in `Character.update()` — removed per-state `mesh.tint.set()` calls from `IdleState` and `WalkState` to keep states fully decoupled from visual concerns
+
+### 🎨 Shader
+
+- **`ModelUniforms` Struct Alignment Fix**: Restored missing `scale: vec4<f32>` field between `modelMatrix` and `tint` in `cube/vert.wgsl`, correctly matching the 96-byte CPU buffer layout (`modelMatrix 64B + scale 16B + tint 16B`)
+- **Mesh Uniform Buffer**: Corrected `_modelData` upload order in `Mesh.updateModelMatrix()` — `scale` is now written at float offset `16`, `tint` at offset `20`, matching the restored WGSL struct
+
+### 🧪 Debug & Tooling
+
+- **State Debug Panel** (`src/debug/debug-panels/StatePanel.ts`) — new panel under the `State` tab:
+  - `Logical State` folder: live read-only `Current State` display and a `State Tint Overlay` toggle checkbox
+  - `Movement Vector` folder: custom HTML5 Canvas graph injected directly into the Tweakpane DOM, rendering two vectors simultaneously:
+    - Yellow — character velocity, normalised to max frame velocity
+    - Green — camera look direction flattened onto the XZ plane; length attenuates proportionally with pitch angle
+  - Exponential Moving Average smoothing (factor `0.6`) eliminates per-frame delta-time jitter without sacrificing responsiveness
+  - Canvas sized with `box-sizing: border-box` and injected into `.tp-fldv_c` for native Tweakpane layout integration
+- **`IDebugFolder.element`**: Exposed the raw `HTMLElement` on `IDebugFolder` and implemented it in `TweakpaneFolder`, enabling direct DOM injection into any debug folder
+- **Keybinding Conflict Resolution**: Rebinding an action to an already-bound key automatically clears that key from the conflicting action; resolution matches the exact combination of `key + shift + ctrl + alt + meta + rmb` flags
+- **Keybinding Reset UI Sync**: `Reset All Keybindings` now re-syncs all displayed binding labels from the fresh defaults before calling `refresh()`, so the panel immediately reflects the reset state
+- **Rebind Side-Effect Propagation**: After any rebind, all binding rows are refreshed to surface conflict-driven removals — a silently unbound action now shows `None`
+
+### 📖 Documentation
+
+- Updated `README.md`: version badge → `0.2.7`, expanded Character Controller and Debug UI feature lists, marked state debug panel and keybinding panel as complete in TODO
+
+---
+
 ## [0.2.6] - 2026-03-25
 
 ### 🚀 Core Engine

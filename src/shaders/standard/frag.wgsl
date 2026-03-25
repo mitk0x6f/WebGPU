@@ -7,7 +7,8 @@
 fn main(
     @location(0) vNormal: vec3<f32>,
     @location(1) vUV: vec2<f32>,
-    @location(2) vWorldPos: vec3<f32>
+    @location(2) vWorldPos: vec3<f32>,
+    @location(3) tintColor: vec4<f32>
 ) -> @location(0) vec4<f32>
 {
     // Custom lighting: Strong top light (1.0), bright sides (0.75), dark bottom (0.0)
@@ -21,10 +22,8 @@ fn main(
 
     let texColor = textureSample(myTexture, mySampler, vUV);
 
-    // Apply lighting and black tint
-    // Tint factor: 0.5 (dark)
-    let tint = vec3<f32>(0.5, 0.5, 0.5);
-    let finalColor = texColor.rgb * finalLight * tint;
+    // Apply lighting and dynamic tint
+    let finalColor = texColor.rgb * finalLight * tintColor.rgb;
 
     // DEBUG: Visualize UVs
     // return vec4<f32>(vUV.x, vUV.y, 0.0, 1.0);

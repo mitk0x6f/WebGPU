@@ -94,6 +94,8 @@ export class InputMapper
 
     /**
      * Updates the binding for a specific action.
+     * Automatically resolves conflicts: if the new binding's key+modifier combo
+     * is already used by another action, that conflicting binding is removed first.
      */
     public setBinding(action: InputAction, binding: InputBinding | InputBinding[] | null): void
     {
@@ -101,8 +103,65 @@ export class InputMapper
         if (Array.isArray(binding)) binding.forEach(v => v.key = v.key.toLowerCase());
         else if (binding) binding.key = binding.key.toLowerCase();
 
+        // Resolve conflicts: unbind matching key combos from all OTHER actions
+        if (binding)
+        {
+            const newBindings = Array.isArray(binding) ? binding : [binding];
+
+            for (const nb of newBindings)
+            {
+                this._removeConflictingBindings(action, nb);
+            }
+        }
+
         this._mapping[action] = binding;
         this.save();
+    }
+
+    /**
+     * Scans all actions (except `excludeAction`) and removes any binding that
+     * matches the same key + modifier combination as `target`.
+     */
+    private _removeConflictingBindings(excludeAction: InputAction, target: InputBinding): void
+    {
+        for (const actionKey in this._mapping)
+        {
+            const otherAction = actionKey as InputAction;
+
+            if (otherAction === excludeAction) continue;
+
+            const existing = this._mapping[otherAction];
+
+            if (!existing) continue;
+
+            if (Array.isArray(existing))
+            {
+                // Filter out any binding that matches the target combo
+                const filtered = existing.filter(b => !this._bindingsMatch(b, target));
+
+                // Update: if nothing left set to null, if one left unwrap from array
+                if (filtered.length === 0) this._mapping[otherAction] = null;
+                else if (filtered.length === 1) this._mapping[otherAction] = filtered[0];
+                else this._mapping[otherAction] = filtered;
+            }
+            else if (this._bindingsMatch(existing, target))
+            {
+                this._mapping[otherAction] = null;
+            }
+        }
+    }
+
+    /**
+     * Returns true if two bindings share the same key and modifier flags.
+     */
+    private _bindingsMatch(a: InputBinding, b: InputBinding): boolean
+    {
+        return a.key === b.key
+            && !!a.shift === !!b.shift
+            && !!a.ctrl  === !!b.ctrl
+            && !!a.alt   === !!b.alt
+            && !!a.meta  === !!b.meta
+            && !!a.rmb   === !!b.rmb;
     }
 
     public getGameplaySettings(): GameplaySettings

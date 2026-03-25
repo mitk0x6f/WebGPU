@@ -10,6 +10,11 @@ import { Ray } from '../physics/ray';
 import { RaycastHit } from '../physics/collider';
 import { Mesh } from './renderables/mesh';
 
+import { CharacterStateMachine } from './character-states/character-state-machine';
+import { CharacterStateId } from './character-states/character-state-id';
+import { IdleState } from './character-states/idle-state';
+import { WalkState } from './character-states/walk-state';
+
 /**
  * Distance above the character's feet origin from which the downward ray is cast.
  * Must be large enough to still hit the ground when the character is standing on it.
@@ -44,6 +49,13 @@ const WALL_RAY_ORIGIN_HEIGHT = 1.0;
 export class Character
 {
     public readonly mesh: Mesh;
+
+    // * State Machine
+    public readonly stateMachine: CharacterStateMachine;
+
+    // * Debugging
+    public debugStateTint: boolean = false;
+    private _lastStateTintId: CharacterStateId | null = null;
 
     public position = vec3.create();
 
@@ -81,7 +93,7 @@ export class Character
 
     private readonly _forward = vec3.create();
     private readonly _right = vec3.create();
-    private readonly _velocity = vec3.create();
+    public readonly velocity = vec3.create();
     private readonly _rayOrigin = vec3.create();
     private readonly _rayDir = vec3.fromValues(0, -1, 0);
     private readonly _groundPoint = vec3.create();
@@ -110,6 +122,12 @@ export class Character
         this._groundHit = new RaycastHit();
         this._wallHitX  = new RaycastHit();
         this._wallHitZ  = new RaycastHit();
+
+        // Initialize State Machine
+        this.stateMachine = new CharacterStateMachine(this);
+        this.stateMachine.registerState(new IdleState());
+        this.stateMachine.registerState(new WalkState());
+        this.stateMachine.start(CharacterStateId.Idle);
     }
 
     // * Public API
@@ -142,67 +160,49 @@ export class Character
 
         if (ignoreInput) return;
 
-        // * 2. Horizontal movement
-        const rad = this.rotation * DEG_TO_RAD;
+        // * 2. State Machine Update (handles movement and rotation logically)
+        this.stateMachine.update(dt, input, physics);
 
-        // Standard WebGPU convention: Forward = -Z, Right = +X at 0°.
-        vec3.set(this._forward, -Math.sin(rad), 0, -Math.cos(rad));
-        vec3.set(this._right, Math.cos(rad), 0, -Math.sin(rad));
-        vec3.zero(this._velocity);
-
-        if (input.isActionPressed(InputAction.MoveForward)) vec3.add(this._velocity, this._velocity, this._forward);
-        if (input.isActionPressed(InputAction.MoveBackward)) vec3.sub(this._velocity, this._velocity, this._forward);
-        if (input.isActionPressed(InputAction.StrafeLeft)) vec3.sub(this._velocity, this._velocity, this._right);
-        if (input.isActionPressed(InputAction.StrafeRight)) vec3.add(this._velocity, this._velocity, this._right);
-
-        if (vec3.squaredLength(this._velocity) > 0.000001)
+        // Debug Tinting Application
+        if (this.debugStateTint)
         {
-            vec3.normalize(this._velocity, this._velocity);
-            vec3.scale(this._velocity, this._velocity, this._speed * dt);
+            const currentState = this.stateMachine.currentStateId as CharacterStateId;
 
-            // * Horizontal Collision Detection (X, Z sliding)
-            // We check X and Z movement separately to allow sliding along walls.
-            // Rays are cast at waist-height to detect vertical surfaces (cubes).
-
-            vec3.set(this._wallRayOrigin, this.position[0], this.position[1] + WALL_RAY_ORIGIN_HEIGHT, this.position[2]);
-
-            // Check X collision
-            if (this._velocity[0] !== 0)
+            if (this._lastStateTintId !== currentState)
             {
-                vec3.set(this._wallRayDir, Math.sign(this._velocity[0]), 0, 0);
-                vec3.copy(this._wallRay.origin, this._wallRayOrigin);
-                vec3.copy(this._wallRay.direction, this._wallRayDir);
+                this._lastStateTintId = currentState;
 
-                if (physics.raycast(this._wallRay, this._wallHitX))
-                {
-                    if (this._wallHitX.distance < COLLISION_RADIUS + Math.abs(this._velocity[0]))
-                    {
-                        this._velocity[0] = 0;
-                    }
-                }
+                if (currentState === CharacterStateId.Idle) this.mesh.tint.set([1, 1, 1, 1]);
+                else this.mesh.tint.set([1, 1, 0, 1]);
             }
-
-            // Check Z collision
-            if (this._velocity[2] !== 0)
-            {
-                vec3.set(this._wallRayDir, 0, 0, Math.sign(this._velocity[2]));
-                vec3.copy(this._wallRay.origin, this._wallRayOrigin);
-                vec3.copy(this._wallRay.direction, this._wallRayDir);
-
-                if (physics.raycast(this._wallRay, this._wallHitZ))
-                {
-                    if (this._wallHitZ.distance < COLLISION_RADIUS + Math.abs(this._velocity[2]))
-                    {
-                        this._velocity[2] = 0;
-                    }
-                }
-            }
-
-            this.position[0] += this._velocity[0];
-            this.position[2] += this._velocity[2];
+        }
+        else if (this._lastStateTintId !== null)
+        {
+            // Revert when toggled off
+            this._lastStateTintId = null;
+            this.mesh.tint.set([1, 1, 1, 1]);
         }
 
-        // * 3. Yaw rotation (Q/E or camera-driven)
+        // * 3. Sync mesh to logical position / rotation
+        vec3.copy(this.mesh.position as vec3, this.position);
+        this.mesh.rotation[1] = this.rotation + 180; // Model faces -Z at 0°
+    }
+
+    // * Movement and Rotation API for States
+
+    /**
+     * Clears the current movement velocity.
+     */
+    public clearVelocity(): void
+    {
+        vec3.zero(this.velocity);
+    }
+
+    /**
+     * Handles rotational input from the user.
+     */
+    public handleRotation(dt: number, input: InputManager): void
+    {
         const isLookRotating = input.isActionPressed(InputAction.LookRotate);
         const isRotatingLeft = input.isActionPressed(InputAction.TurnLeft);
         const isRotatingRight = input.isActionPressed(InputAction.TurnRight);
@@ -214,10 +214,76 @@ export class Character
             if (isRotatingLeft && !isStrafingLeft) this.rotation += this._rotationSpeed * dt;
             if (isRotatingRight && !isStrafingRight) this.rotation -= this._rotationSpeed * dt;
         }
+    }
 
-        // * 4. Sync mesh to logical position / rotation
-        vec3.copy(this.mesh.position as vec3, this.position);
-        this.mesh.rotation[1] = this.rotation + 180; // Model faces -Z at 0°
+    /**
+     * Computes movement velocity based on input and applies wall collisions.
+     * Returns true if movement input was provided.
+     */
+    public handleMovement(dt: number, input: InputManager, physics: PhysicsWorld): boolean
+    {
+        const rad = this.rotation * DEG_TO_RAD;
+
+        // Standard WebGPU convention: Forward = -Z, Right = +X at 0°.
+        vec3.set(this._forward, -Math.sin(rad), 0, -Math.cos(rad));
+        vec3.set(this._right, Math.cos(rad), 0, -Math.sin(rad));
+        vec3.zero(this.velocity);
+
+        if (input.isActionPressed(InputAction.MoveForward)) vec3.add(this.velocity, this.velocity, this._forward);
+        if (input.isActionPressed(InputAction.MoveBackward)) vec3.sub(this.velocity, this.velocity, this._forward);
+        if (input.isActionPressed(InputAction.StrafeLeft)) vec3.sub(this.velocity, this.velocity, this._right);
+        if (input.isActionPressed(InputAction.StrafeRight)) vec3.add(this.velocity, this.velocity, this._right);
+
+        if (vec3.squaredLength(this.velocity) > 0.000001)
+        {
+            vec3.normalize(this.velocity, this.velocity);
+            vec3.scale(this.velocity, this.velocity, this._speed * dt);
+
+            // * Horizontal Collision Detection (X, Z sliding)
+            // We check X and Z movement separately to allow sliding along walls.
+            // Rays are cast at waist-height to detect vertical surfaces (cubes).
+
+            vec3.set(this._wallRayOrigin, this.position[0], this.position[1] + WALL_RAY_ORIGIN_HEIGHT, this.position[2]);
+
+            // Check X collision
+            if (this.velocity[0] !== 0)
+            {
+                vec3.set(this._wallRayDir, Math.sign(this.velocity[0]), 0, 0);
+                vec3.copy(this._wallRay.origin, this._wallRayOrigin);
+                vec3.copy(this._wallRay.direction, this._wallRayDir);
+
+                if (physics.raycast(this._wallRay, this._wallHitX))
+                {
+                    if (this._wallHitX.distance < COLLISION_RADIUS + Math.abs(this.velocity[0]))
+                    {
+                        this.velocity[0] = 0;
+                    }
+                }
+            }
+
+            // Check Z collision
+            if (this.velocity[2] !== 0)
+            {
+                vec3.set(this._wallRayDir, 0, 0, Math.sign(this.velocity[2]));
+                vec3.copy(this._wallRay.origin, this._wallRayOrigin);
+                vec3.copy(this._wallRay.direction, this._wallRayDir);
+
+                if (physics.raycast(this._wallRay, this._wallHitZ))
+                {
+                    if (this._wallHitZ.distance < COLLISION_RADIUS + Math.abs(this.velocity[2]))
+                    {
+                        this.velocity[2] = 0;
+                    }
+                }
+            }
+
+            this.position[0] += this.velocity[0];
+            this.position[2] += this.velocity[2];
+
+            return true;
+        }
+
+        return false;
     }
 
     // * Private helpers
