@@ -24,7 +24,7 @@ const GROUND_RAY_ORIGIN_OFFSET = 0.5;
 /**
  * Maximum distance downward the ray travels to detect ground.
  */
-const GROUND_RAY_MAX_DISTANCE   = 1.0;
+const GROUND_RAY_MAX_DISTANCE = 1.0;
 
 /**
  * When airborne this amount of gravity (m/s²) is applied downward each second.
@@ -38,6 +38,7 @@ const MAX_SLOPE_ANGLE_DEG = 46;
 
 /**
  * Distance from the character center to the collision boundary.
+ * Also used as the perpendicular spread for multi-ray wall detection.
  */
 const COLLISION_RADIUS = 0.4;
 
@@ -102,15 +103,14 @@ export class Character
     // Reusable downward ray (re-used every frame, origin updated before use).
     private readonly _groundRay: Ray;
 
-    // Reusable horizontal wall rays.
+    // Reusable horizontal wall ray.
     private readonly _wallRay: Ray;
     private readonly _wallRayOrigin = vec3.create();
     private readonly _wallRayDir = vec3.create();
 
     // Reusable hit objects (zero-allocation physics)
     private readonly _groundHit: RaycastHit;
-    private readonly _wallHitX: RaycastHit;
-    private readonly _wallHitZ: RaycastHit;
+    private readonly _wallHit: RaycastHit;
 
     constructor(mesh: Mesh)
     {
@@ -120,8 +120,7 @@ export class Character
         this._wallRay = new Ray(this._wallRayOrigin, this._wallRayDir);
 
         this._groundHit = new RaycastHit();
-        this._wallHitX  = new RaycastHit();
-        this._wallHitZ  = new RaycastHit();
+        this._wallHit = new RaycastHit();
 
         // Initialize State Machine
         this.stateMachine = new CharacterStateMachine(this);
@@ -239,46 +238,69 @@ export class Character
             vec3.normalize(this.velocity, this.velocity);
             vec3.scale(this.velocity, this.velocity, this._speed * dt);
 
-            // * Horizontal Collision Detection (X, Z sliding)
-            // We check X and Z movement separately to allow sliding along walls.
-            // Rays are cast at waist-height to detect vertical surfaces (cubes).
+            // * Horizontal Collision Detection (Sweep and Slide)
+            // We sweep the character's bounding sphere along the velocity vector.
+            // If we hit an obstacle, we move to the contact point, project the remaining
+            // velocity along the wall's tangent, and sweep again. Max 3 iterations.
 
-            vec3.set(this._wallRayOrigin, this.position[0], this.position[1] + WALL_RAY_ORIGIN_HEIGHT, this.position[2]);
-
-            // Check X collision
-            if (this.velocity[0] !== 0)
+            for (let i = 0; i < 3; i++)
             {
-                vec3.set(this._wallRayDir, Math.sign(this.velocity[0]), 0, 0);
+                const distanceToMove = vec3.length(this.velocity);
+
+                if (distanceToMove < 0.0001) break;
+
+                // Normalize direction for the raycast
+                vec3.scale(this._wallRayDir, this.velocity, 1.0 / distanceToMove);
+
+                vec3.set(this._wallRayOrigin, this.position[0], this.position[1] + WALL_RAY_ORIGIN_HEIGHT, this.position[2]);
                 vec3.copy(this._wallRay.origin, this._wallRayOrigin);
                 vec3.copy(this._wallRay.direction, this._wallRayDir);
 
-                if (physics.raycast(this._wallRay, this._wallHitX))
+                // Because sphereCast inflates the box, we just cast up to `distanceToMove`
+                const eps = 0.001; // Tiny skin-width to prevent float-snapping directly onto faces
+                const maxDist = distanceToMove + eps;
+
+                if (physics.raycast(this._wallRay, maxDist, this._wallHit, COLLISION_RADIUS))
                 {
-                    if (this._wallHitX.distance < COLLISION_RADIUS + Math.abs(this.velocity[0]))
+                    // Calculate how far we can safely move before hitting the inflated wall
+                    let safeDist = this._wallHit.distance - eps;
+
+                    if (safeDist < 0) safeDist = 0;
+
+                    const moveDist = Math.min(distanceToMove, safeDist);
+
+                    // Move up to the wall
+                    this.position[0] += this._wallRayDir[0] * moveDist;
+                    this.position[2] += this._wallRayDir[2] * moveDist;
+
+                    // Remaining velocity to project and slide
+                    const remainingDist = distanceToMove - moveDist;
+                    vec3.scale(this.velocity, this._wallRayDir, remainingDist);
+
+                    // Project the remaining velocity onto the wall's plane.
+                    const normal = this._wallHit.normal;
+                    const dot = vec3.dot(this.velocity, normal);
+
+                    // Remove the component pointing INTO the wall
+                    if (dot < 0)
                     {
-                        this.velocity[0] = 0;
+                        this.velocity[0] -= dot * normal[0];
+                        this.velocity[1] -= dot * normal[1];
+                        this.velocity[2] -= dot * normal[2];
                     }
+
+                    // Zero out Y changes to enforce 2D horizontal sliding
+                    this.velocity[1] = 0;
+                }
+                else
+                {
+                    // No collision, move the full distance and exit the loop.
+                    this.position[0] += this.velocity[0];
+                    this.position[2] += this.velocity[2];
+
+                    break;
                 }
             }
-
-            // Check Z collision
-            if (this.velocity[2] !== 0)
-            {
-                vec3.set(this._wallRayDir, 0, 0, Math.sign(this.velocity[2]));
-                vec3.copy(this._wallRay.origin, this._wallRayOrigin);
-                vec3.copy(this._wallRay.direction, this._wallRayDir);
-
-                if (physics.raycast(this._wallRay, this._wallHitZ))
-                {
-                    if (this._wallHitZ.distance < COLLISION_RADIUS + Math.abs(this.velocity[2]))
-                    {
-                        this.velocity[2] = 0;
-                    }
-                }
-            }
-
-            this.position[0] += this.velocity[0];
-            this.position[2] += this.velocity[2];
 
             return true;
         }
@@ -310,9 +332,11 @@ export class Character
         // Update the cached Ray's origin in-place (avoid allocation).
         vec3.copy(this._groundRay.origin, this._rayOrigin);
 
-        if (physics.raycast(this._groundRay, this._groundHit))
+        const groundMaxDistance = GROUND_RAY_ORIGIN_OFFSET + GROUND_RAY_MAX_DISTANCE;
+
+        if (physics.raycast(this._groundRay, groundMaxDistance, this._groundHit))
         {
-            if (this._groundHit.distance <= GROUND_RAY_ORIGIN_OFFSET + GROUND_RAY_MAX_DISTANCE)
+            if (this._groundHit.distance <= groundMaxDistance)
             {
                 // Compute slope: angle between surface normal and world-up (0, 1, 0).
                 const slopeAngleDeg = Math.acos(

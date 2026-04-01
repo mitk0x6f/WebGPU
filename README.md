@@ -1,4 +1,4 @@
-![Version](https://img.shields.io/badge/Version-0.2.7-blue)
+![Version](https://img.shields.io/badge/Version-0.2.8-blue)
 ![WIP](https://img.shields.io/badge/Work_In_Progress-yellow)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)

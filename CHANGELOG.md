@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.2.8] - 2026-04-01
+
+### 🎮 Character Controller
+
+- **AAA Sweep-And-Slide Character Movement**: Replaced independent X and Z-axis physics checks with a unified constraint-solving loop that sweeps a sphere physically along the true velocity vector. Implemented normal-based velocity projection for flawlessly smooth diagonal sliding against off-axis geometry.
+- **Robust Inside-Object Ejection**: Implemented a mathematically rigorous "inside-out" validation for physics queries. If the character is detected inside an obstacle, the system now calculates the nearest face normal and blocks further penetration while always permitting the character to walk away from the stuck state.
+- **High-Performance Raycasting Engine**: Updated the physics API to support distance-bounded queries, ensuring O(1) performance scaling. Volumetric sphere-sweeping is now integrated directly into the `raycast` method via an optional `radius` parameter, utilizing instance-level memory scratchpads to achieve zero per-frame object allocation (0 GC overhead) while maintaining multi-world thread safety.
+
+### 📖 Documentation
+
+- Updated `README.md`: version badge → `0.2.8`.
+
+---
+
 ## [0.2.7] - 2026-03-25
 
 ### 🎮 Character Controller

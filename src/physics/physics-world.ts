@@ -4,6 +4,7 @@ import { vec3, mat4 } from 'gl-matrix';
 import { BoxCollider, RaycastHit } from './collider';
 import type { Collider } from './collider';
 import type { Ray } from './ray';
+import { AABB } from './aabb';
 import type { Scene } from '../scene/scene';
 
 /**
@@ -16,8 +17,9 @@ export class PhysicsWorld
 {
     private _colliders: Collider[] = [];
 
-    // Temporary hit object used during broadphase iteration to prevent allocations.
+    // Temporary objects used during broadphase iteration to prevent allocations.
     private readonly _tempHit = new RaycastHit();
+    private readonly _tempAABB = new AABB(vec3.create(), vec3.create());
 
     constructor()
     {
@@ -120,10 +122,7 @@ export class PhysicsWorld
     {
         const index = this._colliders.indexOf(collider);
 
-        if (index > -1)
-        {
-            this._colliders.splice(index, 1);
-        }
+        if (index > -1) this._colliders.splice(index, 1);
     }
 
     /**
@@ -140,21 +139,32 @@ export class PhysicsWorld
      * Casts `ray` against all registered colliders. If a hit is found, populates
      * `outHit` with the intersection details and returns `true`. Returns `false` otherwise.
      *
+     * If `radius` > 0, performs a volumetric sphere sweep (Minkowski expansion constraint).
+     *
      * Broadphase: AABB rejection (cheap).
-     * Narrowphase: exact OBB raycast via `Collider.raycast(..., outHit)`.
+     * Narrowphase: exact OBB raycast via `Collider.raycast(..., outHit, radius)`.
      */
-    public raycast(ray: Ray, outHit: RaycastHit): boolean
+    public raycast(ray: Ray, maxDistance: number, outHit: RaycastHit, radius: number = 0): boolean
     {
         let hitAnything = false;
-        let minDistance = Infinity;
+        let minDistance = maxDistance;
 
         for (const collider of this._colliders)
         {
-            // Broadphase
-            if (!ray.intersectAABB(collider.aabb)) continue;
+            // Broadphase: Inflate AABB by radius before check
+            let checkAABB = collider.aabb;
+
+            if (radius > 0)
+            {
+                checkAABB = this._tempAABB;
+                vec3.set(checkAABB.min, collider.aabb.min[0] - radius, collider.aabb.min[1] - radius, collider.aabb.min[2] - radius);
+                vec3.set(checkAABB.max, collider.aabb.max[0] + radius, collider.aabb.max[1] + radius, collider.aabb.max[2] + radius);
+            }
+
+            if (!ray.intersectAABB(checkAABB)) continue;
 
             // Narrowphase
-            if (collider.raycast(ray, this._tempHit))
+            if (collider.raycast(ray, maxDistance, this._tempHit, radius))
             {
                 if (this._tempHit.distance < minDistance)
                 {
